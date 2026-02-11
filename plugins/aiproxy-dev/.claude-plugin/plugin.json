@@ -1,0 +1,8 @@
+{
+  "name": "aiproxy-dev",
+  "description": "AIProxy API development guide - codeb auth, endpoints, models, SDK patterns for error-free implementation",
+  "version": "1.0.0",
+  "author": {
+    "name": "jaewooseo"
+  }
+}

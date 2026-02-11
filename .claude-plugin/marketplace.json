@@ -22,6 +22,15 @@
       "author": {
         "name": "jaewooseo"
       }
+    },
+    {
+      "name": "aiproxy-dev",
+      "source": "./plugins/aiproxy-dev",
+      "description": "AIProxy API development guide - codeb auth, endpoints, models, SDK patterns for error-free AI API implementation",
+      "version": "1.0.0",
+      "author": {
+        "name": "jaewooseo"
+      }
     }
   ]
 }
