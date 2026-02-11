@@ -19,9 +19,9 @@ struct Cli {
     #[arg(long)]
     context: Option<String>,
 
-    /// Project root path
-    #[arg(long)]
-    project_path: String,
+    /// Project root path (required for new/resume meetings, not for --list-sessions)
+    #[arg(long, required_unless_present = "list_sessions")]
+    project_path: Option<String>,
 
     /// Maximum number of discussion rounds
     #[arg(long, default_value = "3")]
@@ -46,7 +46,7 @@ async fn main() {
 
     // --list-sessions mode
     if cli.list_sessions {
-        match session::list_sessions(&cli.project_path) {
+        match session::list_sessions() {
             Ok(sessions) => {
                 let json = serde_json::to_string_pretty(&sessions).unwrap_or_else(|e| {
                     format!("{{\"error\": \"Failed to serialize: {}\"}}", e)
@@ -63,9 +63,10 @@ async fn main() {
 
     // --resume mode
     if let Some(meeting_id) = cli.resume {
+        let project_path = cli.project_path.expect("--project-path is required for --resume");
         let request = orchestrator::ResumeRequest {
             meeting_id,
-            project_path: cli.project_path,
+            project_path,
             max_iterations: cli.max_iterations,
             chair_model: cli.chair_model,
         };
@@ -97,11 +98,12 @@ async fn main() {
 
     // Normal new meeting mode
     let agenda = cli.agenda.expect("agenda is required for new meetings");
+    let project_path = cli.project_path.expect("--project-path is required for new meetings");
 
     let request = orchestrator::BraintrustRequest {
         agenda,
         context: cli.context,
-        project_path: cli.project_path,
+        project_path,
         max_iterations: cli.max_iterations,
         chair_model: cli.chair_model,
     };

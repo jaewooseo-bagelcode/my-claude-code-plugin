@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,6 +124,17 @@ fn now_millis() -> u64 {
         .as_millis() as u64
 }
 
+/// Returns ~/.braintrust/sessions/ base directory.
+fn sessions_base_dir() -> Result<PathBuf, String> {
+    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
+    Ok(home.join(".braintrust").join("sessions"))
+}
+
+/// Returns the session directory for a specific meeting: ~/.braintrust/sessions/{meeting_id}/
+fn meeting_dir(meeting_id: &str) -> Result<PathBuf, String> {
+    Ok(sessions_base_dir()?.join(meeting_id))
+}
+
 pub fn create_meeting_meta(meeting_id: &str, agenda: &str, context: Option<&str>) -> BraintrustMeetingMeta {
     BraintrustMeetingMeta {
         meeting_id: meeting_id.to_string(),
@@ -135,28 +147,24 @@ pub fn create_meeting_meta(meeting_id: &str, agenda: &str, context: Option<&str>
     }
 }
 
-pub fn save_meeting_meta(project_path: &str, meta: &BraintrustMeetingMeta) -> Result<(), String> {
-    let dir = format!("{}/.braintrust-sessions/{}", project_path, meta.meeting_id);
+pub fn save_meeting_meta(meta: &BraintrustMeetingMeta) -> Result<(), String> {
+    let dir = meeting_dir(&meta.meeting_id)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
-    let path = format!("{}/metadata.json", dir);
+    let path = dir.join("metadata.json");
     let json = serde_json::to_string_pretty(meta).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())
 }
 
 pub fn save_iteration(
-    project_path: &str,
     meeting_id: &str,
     iteration: &BraintrustIteration,
 ) -> Result<(), String> {
-    let dir = format!(
-        "{}/.braintrust-sessions/{}/iteration_{}",
-        project_path, meeting_id, iteration.iteration
-    );
+    let dir = meeting_dir(meeting_id)?.join(format!("iteration_{}", iteration.iteration));
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
     for session in &iteration.participant_sessions {
-        let path = format!("{}/{}.json", dir, session.provider);
+        let path = dir.join(format!("{}.json", session.provider));
         let json = serde_json::to_string_pretty(session).map_err(|e| e.to_string())?;
         fs::write(&path, json).map_err(|e| e.to_string())?;
     }
@@ -167,7 +175,7 @@ pub fn save_iteration(
         "timestamp": iteration.timestamp,
         "participant_count": iteration.participant_sessions.len(),
     });
-    let meta_path = format!("{}/metadata.json", dir);
+    let meta_path = dir.join("metadata.json");
     let json = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;
     fs::write(&meta_path, json).map_err(|e| e.to_string())?;
 
@@ -175,28 +183,23 @@ pub fn save_iteration(
 }
 
 pub fn save_chair_summary(
-    project_path: &str,
     meeting_id: &str,
     summary: &AiResponse,
 ) -> Result<(), String> {
-    let dir = format!("{}/.braintrust-sessions/{}", project_path, meeting_id);
+    let dir = meeting_dir(meeting_id)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
-    let path = format!("{}/chair.json", dir);
+    let path = dir.join("chair.json");
     let json = serde_json::to_string_pretty(summary).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())
 }
 
 pub fn update_meeting_status(
-    project_path: &str,
     meeting_id: &str,
     status: &str,
     elapsed_ms: u64,
 ) -> Result<(), String> {
-    let path = format!(
-        "{}/.braintrust-sessions/{}/metadata.json",
-        project_path, meeting_id
-    );
+    let path = meeting_dir(meeting_id)?.join("metadata.json");
 
     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let mut meta: BraintrustMeetingMeta = serde_json::from_str(&content).map_err(|e| e.to_string())?;
@@ -209,12 +212,12 @@ pub fn update_meeting_status(
     fs::write(&path, json).map_err(|e| e.to_string())
 }
 
-/// List all meeting sessions in the project
-pub fn list_sessions(project_path: &str) -> Result<Vec<BraintrustMeetingMeta>, String> {
-    let sessions_dir = format!("{}/.braintrust-sessions", project_path);
+/// List all meeting sessions
+pub fn list_sessions() -> Result<Vec<BraintrustMeetingMeta>, String> {
+    let sessions_dir = sessions_base_dir()?;
     let dir = match fs::read_dir(&sessions_dir) {
         Ok(d) => d,
-        Err(_) => return Ok(Vec::new()), // No sessions directory yet
+        Err(_) => return Ok(Vec::new()),
     };
 
     let mut sessions = Vec::new();
@@ -234,11 +237,10 @@ pub fn list_sessions(project_path: &str) -> Result<Vec<BraintrustMeetingMeta>, S
 }
 
 /// Load previous iterations from a meeting session
-pub fn load_iterations(project_path: &str, meeting_id: &str) -> Result<Vec<BraintrustIteration>, String> {
-    let session_dir = format!("{}/.braintrust-sessions/{}", project_path, meeting_id);
+pub fn load_iterations(meeting_id: &str) -> Result<Vec<BraintrustIteration>, String> {
+    let session_dir = meeting_dir(meeting_id)?;
 
-    // Find all iteration_N directories
-    let mut iteration_dirs: Vec<(u32, std::path::PathBuf)> = Vec::new();
+    let mut iteration_dirs: Vec<(u32, PathBuf)> = Vec::new();
     let dir = fs::read_dir(&session_dir).map_err(|e| format!("Cannot read session dir: {}", e))?;
     for entry in dir.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
@@ -252,7 +254,6 @@ pub fn load_iterations(project_path: &str, meeting_id: &str) -> Result<Vec<Brain
 
     let mut iterations = Vec::new();
     for (iter_num, iter_path) in iteration_dirs {
-        // Read iteration metadata
         let meta_path = iter_path.join("metadata.json");
         let meta_content = fs::read_to_string(&meta_path)
             .map_err(|e| format!("Cannot read iteration metadata: {}", e))?;
@@ -263,7 +264,6 @@ pub fn load_iterations(project_path: &str, meeting_id: &str) -> Result<Vec<Brain
             .unwrap_or("")
             .to_string();
 
-        // Read participant sessions
         let mut participant_sessions = Vec::new();
         for provider in &["openai", "gemini", "claude"] {
             let ps_path = iter_path.join(format!("{}.json", provider));
@@ -286,8 +286,8 @@ pub fn load_iterations(project_path: &str, meeting_id: &str) -> Result<Vec<Brain
 }
 
 /// Load meeting metadata
-pub fn load_meeting_meta(project_path: &str, meeting_id: &str) -> Result<BraintrustMeetingMeta, String> {
-    let path = format!("{}/.braintrust-sessions/{}/metadata.json", project_path, meeting_id);
+pub fn load_meeting_meta(meeting_id: &str) -> Result<BraintrustMeetingMeta, String> {
+    let path = meeting_dir(meeting_id)?.join("metadata.json");
     let content = fs::read_to_string(&path)
         .map_err(|e| format!("Cannot read meeting metadata: {}", e))?;
     serde_json::from_str(&content)
@@ -306,7 +306,6 @@ pub struct DebugLogEntry {
 }
 
 pub fn log_debug(
-    project_path: &str,
     meeting_id: &str,
     level: &str,
     provider: &str,
@@ -322,21 +321,20 @@ pub fn log_debug(
         message: message.to_string(),
         data,
     };
-    let _ = append_debug_log(project_path, meeting_id, &entry);
+    let _ = append_debug_log(meeting_id, &entry);
 }
 
 fn append_debug_log(
-    project_path: &str,
     meeting_id: &str,
     entry: &DebugLogEntry,
 ) -> Result<(), String> {
     use std::io::Write;
     use std::fs::OpenOptions;
 
-    let dir = format!("{}/.braintrust-sessions/{}", project_path, meeting_id);
+    let dir = meeting_dir(meeting_id)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
-    let path = format!("{}/debug.jsonl", dir);
+    let path = dir.join("debug.jsonl");
     let line = serde_json::to_string(entry).map_err(|e| e.to_string())?;
 
     let mut file = OpenOptions::new()

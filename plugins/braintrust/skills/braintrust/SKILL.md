@@ -31,8 +31,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/braintrust-darwin-arm64 \
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/bin/braintrust-darwin-arm64 \
-  --list-sessions \
-  --project-path "!`git rev-parse --show-toplevel`"
+  --list-sessions
 ```
 
 ## 인자
@@ -40,7 +39,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/braintrust-darwin-arm64 \
 | 인자 | 필수 | 설명 |
 |------|------|------|
 | `--agenda` | 새 회의 시 | 토론 안건 (사용자 질문) |
-| `--project-path` | Yes | 프로젝트 루트 절대 경로 |
+| `--project-path` | 회의 시 | 프로젝트 루트 절대 경로 (새 회의/이어하기에 필수, 세션 목록엔 불필요) |
 | `--context` | No | 추가 맥락 (코드 스니펫, 제약조건 등) |
 | `--max-iterations` | No | 최대 토론 라운드 (기본: 3) |
 | `--chair-model` | No | 의장 모델: `claude-opus-4-6` (기본) 또는 `gpt-5.2` |

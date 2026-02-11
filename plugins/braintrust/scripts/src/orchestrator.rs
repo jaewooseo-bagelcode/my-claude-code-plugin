@@ -31,7 +31,7 @@ pub async fn run_braintrust(
         })?;
 
     session::log_debug(
-        &request.project_path, &meeting_id,
+        &meeting_id,
         "info", "system", "meeting_start",
         &format!("Braintrust meeting started: {} (max_iterations={})", meeting_id, max_iterations),
         Some(json!({ "agenda": &request.agenda, "max_iterations": max_iterations })),
@@ -40,7 +40,7 @@ pub async fn run_braintrust(
     events::emit_meeting_started(&meeting_id, &request.agenda);
 
     let meta = session::create_meeting_meta(&meeting_id, &request.agenda, request.context.as_deref());
-    let _ = session::save_meeting_meta(&request.project_path, &meta);
+    let _ = session::save_meeting_meta(&meta);
 
     let participant_system_prompt = build_participant_system_prompt(&request.project_path);
     let tool_defs = tools::build_tool_definitions();
@@ -55,7 +55,7 @@ pub async fn run_braintrust(
         events::emit_iteration_started(iter_num, max_iterations, &current_question);
 
         session::log_debug(
-            &request.project_path, &meeting_id,
+            &meeting_id,
             "info", "system", "iteration_start",
             &format!("Iteration {} starting", iter_num),
             Some(json!({ "iteration": iter_num, "question": &current_question })),
@@ -100,7 +100,7 @@ pub async fn run_braintrust(
                 .as_millis() as u64,
         };
 
-        let _ = session::save_iteration(&request.project_path, &meeting_id, &iteration);
+        let _ = session::save_iteration(&meeting_id, &iteration);
         all_iterations.push(iteration);
 
         // Last iteration: skip chair analysis
@@ -157,10 +157,10 @@ pub async fn run_braintrust(
 
     events::emit_chair_completed(chair_elapsed);
 
-    let _ = session::save_chair_summary(&request.project_path, &meeting_id, &chair_response);
+    let _ = session::save_chair_summary(&meeting_id, &chair_response);
 
     let elapsed_ms = start.elapsed().as_millis() as u64;
-    let _ = session::update_meeting_status(&request.project_path, &meeting_id, "completed", elapsed_ms);
+    let _ = session::update_meeting_status(&meeting_id, "completed", elapsed_ms);
 
     // Build raw_responses from last iteration
     let last_iteration = all_iterations.last();
@@ -182,7 +182,7 @@ pub async fn run_braintrust(
 
 pub struct ResumeRequest {
     pub meeting_id: String,
-    pub project_path: String,
+    pub project_path: String, // still needed for tool execution (glob/grep/read/git_diff)
     pub max_iterations: u32,
     pub chair_model: String,
 }
@@ -195,12 +195,12 @@ pub async fn resume_braintrust(
     let max_iterations = request.max_iterations;
 
     // Load previous meeting data
-    let meta = session::load_meeting_meta(&request.project_path, &meeting_id)
+    let meta = session::load_meeting_meta(&meeting_id)
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
             Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
         })?;
 
-    let mut all_iterations = session::load_iterations(&request.project_path, &meeting_id)
+    let mut all_iterations = session::load_iterations(&meeting_id)
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
             Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
         })?;
@@ -236,9 +236,9 @@ pub async fn resume_braintrust(
                 events::log_stderr("[braintrust] Chair says previous discussion was sufficient, re-synthesizing...");
                 let chair_prompt = build_final_synthesis_prompt(&meta.agenda, meta.context.as_deref(), &all_iterations);
                 let chair_response = run_chair(&chair_system_prompt, &chair_prompt, &config, &request.chair_model).await?;
-                let _ = session::save_chair_summary(&request.project_path, &meeting_id, &chair_response);
+                let _ = session::save_chair_summary(&meeting_id, &chair_response);
                 let elapsed_ms = start.elapsed().as_millis() as u64;
-                let _ = session::update_meeting_status(&request.project_path, &meeting_id, "completed", elapsed_ms);
+                let _ = session::update_meeting_status(&meeting_id, "completed", elapsed_ms);
 
                 let total_iterations = all_iterations.len() as u32;
                 let raw_responses = all_iterations.last()
@@ -299,7 +299,7 @@ pub async fn resume_braintrust(
                 .as_millis() as u64,
         };
 
-        let _ = session::save_iteration(&request.project_path, &meeting_id, &iteration);
+        let _ = session::save_iteration(&meeting_id, &iteration);
         all_iterations.push(iteration);
 
         if iter_num >= max_iterations - 1 {
@@ -333,10 +333,10 @@ pub async fn resume_braintrust(
     events::emit_chair_synthesizing();
     let chair_prompt = build_final_synthesis_prompt(&meta.agenda, meta.context.as_deref(), &all_iterations);
     let chair_response = run_chair(&chair_system_prompt, &chair_prompt, &config, &request.chair_model).await?;
-    let _ = session::save_chair_summary(&request.project_path, &meeting_id, &chair_response);
+    let _ = session::save_chair_summary(&meeting_id, &chair_response);
 
     let elapsed_ms = start.elapsed().as_millis() as u64;
-    let _ = session::update_meeting_status(&request.project_path, &meeting_id, "completed", elapsed_ms);
+    let _ = session::update_meeting_status(&meeting_id, "completed", elapsed_ms);
 
     let total_iterations = all_iterations.len() as u32;
     let raw_responses = all_iterations.last()
