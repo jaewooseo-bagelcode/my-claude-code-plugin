@@ -1,0 +1,5 @@
+.scs/
+.DS_Store
+.codex-sessions/
+.braintrust-sessions/
+target/

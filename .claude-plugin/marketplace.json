@@ -1,0 +1,27 @@
+{
+  "name": "my-claude-code-plugin",
+  "description": "Personal Claude Code plugins by jaewooseo",
+  "owner": {
+    "name": "jaewooseo"
+  },
+  "plugins": [
+    {
+      "name": "codex-review",
+      "source": "./plugins/codex-review",
+      "description": "Professional code review and analysis using GPT-5.2-Codex (READ-ONLY). Analyzes bugs, security vulnerabilities, performance issues, and code quality.",
+      "version": "1.2.2",
+      "author": {
+        "name": "jaewooseo"
+      }
+    },
+    {
+      "name": "braintrust",
+      "source": "./plugins/braintrust",
+      "description": "Multi-AI consensus meeting system - GPT-5.2, Gemini 3 Pro, and Claude Opus 4.6 analyze your codebase in parallel, then a chair AI synthesizes their insights through multi-round deliberation",
+      "version": "1.2.0",
+      "author": {
+        "name": "jaewooseo"
+      }
+    }
+  ]
+}
