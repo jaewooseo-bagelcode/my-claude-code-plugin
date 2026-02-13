@@ -1,0 +1,3 @@
+[workspace]
+members = ["aiproxy-common", "braintrust/scripts", "codex-review/scripts"]
+resolver = "2"

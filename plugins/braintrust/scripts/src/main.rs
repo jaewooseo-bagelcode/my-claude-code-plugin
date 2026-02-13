@@ -1,10 +1,7 @@
-mod config;
 mod events;
 mod orchestrator;
 mod providers;
 mod session;
-mod sse;
-mod tools;
 
 use clap::Parser;
 

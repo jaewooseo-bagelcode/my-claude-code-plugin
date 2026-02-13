@@ -1,10 +1,11 @@
-use crate::config::{self, AIProxyConfig};
+use aiproxy_common::config::{self, AIProxyConfig};
+use aiproxy_common::sse::{SseParser, StreamAction, IDLE_TIMEOUT};
+use aiproxy_common::sse::anthropic::parse_anthropic_sse;
+use aiproxy_common::tools;
+use aiproxy_common::session::{AiResponse, ParticipantSession};
 use crate::events;
 use crate::providers;
-use crate::session::{self, AiResponse, BraintrustIteration, BraintrustResult, ParticipantSession};
-use crate::sse::{SseParser, StreamAction, IDLE_TIMEOUT};
-use crate::sse::anthropic::parse_anthropic_sse;
-use crate::tools;
+use crate::session::{self, BraintrustIteration, BraintrustResult};
 use futures_util::StreamExt;
 use serde_json::json;
 use std::time::Instant;
@@ -29,7 +30,7 @@ pub async fn run_braintrust(
     let max_iterations = request.max_iterations;
 
     // Load config
-    let config = crate::config::load_config()
+    let config = aiproxy_common::config::load_config()
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
             Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
         })?;
@@ -47,7 +48,7 @@ pub async fn run_braintrust(
     let _ = session::save_meeting_meta(&meta);
 
     let participant_system_prompt = build_participant_system_prompt(&request.project_path);
-    let tool_defs = tools::build_tool_definitions();
+    let tool_defs = tools::build_tool_definitions(tools::ToolSet::Full);
 
     let chair_system_prompt = build_chair_system_prompt();
 
@@ -255,7 +256,7 @@ pub async fn resume_braintrust(
             Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
         })?;
 
-    let config = crate::config::load_config()
+    let config = aiproxy_common::config::load_config()
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
             Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
         })?;
@@ -263,7 +264,7 @@ pub async fn resume_braintrust(
     events::emit_meeting_started(&meeting_id, &format!("[RESUME] {}", meta.agenda));
 
     let participant_system_prompt = build_participant_system_prompt(&request.project_path);
-    let tool_defs = tools::build_tool_definitions();
+    let tool_defs = tools::build_tool_definitions(tools::ToolSet::Full);
     let chair_system_prompt = build_chair_system_prompt();
 
     let prev_count = all_iterations.len() as u32;
@@ -657,7 +658,7 @@ fn build_participant_system_prompt(project_path: &str) -> String {
     );
 
     // Append project memory if available
-    if let Some(memory) = crate::config::load_project_memory(project_path) {
+    if let Some(memory) = aiproxy_common::config::load_project_memory(project_path) {
         prompt.push_str(&format!("\n\n## 프로젝트 메모리\n{}", memory));
     }
 

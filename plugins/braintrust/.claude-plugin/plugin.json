@@ -1,7 +1,7 @@
 {
   "name": "braintrust",
   "description": "Multi-AI consensus meeting system - GPT-5.2, Gemini 3 Pro, and Claude Opus 4.6 analyze your codebase in parallel, then a chair AI synthesizes their insights through multi-round deliberation",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "author": {
     "name": "jaewooseo"
   }

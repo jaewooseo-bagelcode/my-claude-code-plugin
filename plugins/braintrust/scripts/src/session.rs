@@ -1,92 +1,16 @@
+// Re-export shared types from aiproxy-common
+pub use aiproxy_common::session::{AiResponse, ParticipantSession};
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AiResponse {
-    pub provider: String,
-    pub content: String,
-    pub model: String,
-    pub success: bool,
-    pub error: Option<String>,
-}
+use aiproxy_common::session::now_millis;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParticipantStep {
-    pub step: usize,
-    pub step_type: String,
-    pub tool_name: Option<String>,
-    pub tool_input: Option<Value>,
-    pub tool_output: Option<String>,
-    pub tool_error: Option<String>,
-    pub content: Option<String>,
-    pub timestamp: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParticipantSession {
-    pub provider: String,
-    pub model: String,
-    pub steps: Vec<ParticipantStep>,
-    pub final_content: String,
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl ParticipantSession {
-    pub fn new(provider: &str, model: &str) -> Self {
-        Self {
-            provider: provider.to_string(),
-            model: model.to_string(),
-            steps: Vec::new(),
-            final_content: String::new(),
-            success: false,
-            error: None,
-        }
-    }
-
-    pub fn add_tool_call(
-        &mut self,
-        tool_name: &str,
-        tool_input: Value,
-        tool_output: Result<String, String>,
-    ) {
-        let timestamp = now_millis();
-        let (output, error) = match tool_output {
-            Ok(out) => (Some(out), None),
-            Err(err) => (None, Some(err)),
-        };
-
-        self.steps.push(ParticipantStep {
-            step: self.steps.len() + 1,
-            step_type: "tool_call".to_string(),
-            tool_name: Some(tool_name.to_string()),
-            tool_input: Some(tool_input),
-            tool_output: output,
-            tool_error: error,
-            content: None,
-            timestamp,
-        });
-    }
-
-    pub fn finalize(&mut self, final_content: String, success: bool, error: Option<String>) {
-        self.final_content = final_content;
-        self.success = success;
-        self.error = error;
-    }
-
-    pub fn to_ai_response(&self) -> AiResponse {
-        AiResponse {
-            provider: self.provider.clone(),
-            content: self.final_content.clone(),
-            model: self.model.clone(),
-            success: self.success,
-            error: self.error.clone(),
-        }
-    }
-}
+// ============================================================================
+// Braintrust-specific meeting types
+// ============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BraintrustIteration {
@@ -115,13 +39,6 @@ pub struct BraintrustMeetingMeta {
     pub agenda: String,
     pub context: Option<String>,
     pub status: String,
-}
-
-fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 /// Returns ~/.braintrust/sessions/ base directory.
