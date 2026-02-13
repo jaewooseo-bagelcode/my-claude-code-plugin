@@ -1,12 +1,16 @@
-use crate::config::AIProxyConfig;
+use crate::config::{self, AIProxyConfig};
 use crate::events;
 use crate::session::ParticipantSession;
+use crate::sse::{SseParser, StreamAction, StopReason, IDLE_TIMEOUT};
+use crate::sse::gemini::{parse_gemini_sse, GeminiSseState};
 use crate::tools::{self, ToolDefinition};
+use futures_util::StreamExt;
 use serde_json::{json, Value};
+use tokio::time::timeout;
 
 const MAX_STEPS: usize = 100;
 
-/// Gemini 3 Pro participant with tool loop (generateContent API)
+/// Gemini 3 Pro participant with tool loop (streamGenerateContent API, SSE streaming)
 pub async fn call_gemini_participant(
     system_prompt: &str,
     user_prompt: &str,
@@ -14,7 +18,7 @@ pub async fn call_gemini_participant(
     project_path: &str,
     config: &AIProxyConfig,
 ) -> Result<ParticipantSession, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = config::build_http_client();
     let mut contents = vec![json!({
         "role": "user",
         "parts": [{ "text": user_prompt }]
@@ -45,10 +49,11 @@ pub async fn call_gemini_participant(
             }
         });
 
-        let url = config.gemini_url("/v1beta/models/gemini-3-pro-preview:generateContent");
+        // Use streamGenerateContent with alt=sse
+        let url = config.gemini_url("/v1beta/models/gemini-3-pro-preview:streamGenerateContent?alt=sse");
         let (auth_header, auth_value) = config.gemini_auth();
         events::log_stderr(&format!(
-            "[braintrust/gemini] POST {} (step {})", url, step_num
+            "[braintrust/gemini] POST {} (step {}, streaming)", url, step_num
         ));
 
         let response = client
@@ -69,67 +74,106 @@ pub async fn call_gemini_participant(
             return Ok(session);
         }
 
-        let response_json: Value = response.json().await?;
-        let candidate = response_json.get("candidates")
-            .and_then(|v| v.get(0))
-            .ok_or("Gemini response missing candidates")?;
+        // SSE streaming loop
+        let mut parser = SseParser::new();
+        let mut byte_stream = response.bytes_stream();
+        let mut state = GeminiSseState::new();
+        let mut text_content = String::new();
+        // function_calls: (name, args_json, thought_signature)
+        let mut function_calls: Vec<(String, String, Option<String>)> = Vec::new();
+        let mut stop_reason = StopReason::Unknown;
 
-        let finish_reason = candidate.get("finishReason")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-
-        let content = candidate.get("content").cloned().unwrap_or_else(|| json!({}));
-        let parts = content.get("parts")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default();
-
-        let mut text_fragments = Vec::new();
-        let mut function_calls: Vec<(String, Value)> = Vec::new();
-
-        for part in &parts {
-            if let Some(text) = part.get("text").and_then(|v| v.as_str()) {
-                text_fragments.push(text.to_string());
+        loop {
+            match timeout(IDLE_TIMEOUT, byte_stream.next()).await {
+                Ok(Some(Ok(chunk))) => {
+                    for event in parser.feed(&chunk) {
+                        for action in parse_gemini_sse(&event, &mut state) {
+                            match action {
+                                StreamAction::TextDelta { text, .. } => {
+                                    text_content.push_str(&text);
+                                }
+                                StreamAction::ToolUseStart { name, thought_signature, .. } => {
+                                    function_calls.push((name, String::new(), thought_signature));
+                                }
+                                StreamAction::InputJsonDelta { partial_json, .. } => {
+                                    if let Some(fc) = function_calls.last_mut() {
+                                        fc.1.push_str(&partial_json);
+                                    }
+                                }
+                                StreamAction::MessageComplete { stop_reason: sr } => {
+                                    stop_reason = sr;
+                                }
+                                StreamAction::Error(msg) => {
+                                    return Err(format!("Gemini SSE error: {}", msg).into());
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                Ok(Some(Err(e))) => return Err(format!("Gemini stream error: {}", e).into()),
+                Ok(None) => break,
+                Err(_) => {
+                    if !text_content.is_empty() {
+                        session.finalize(text_content, true, Some("Stream idle timeout (60s)".into()));
+                        return Ok(session);
+                    }
+                    return Err("Gemini stream idle timeout (60s)".into());
+                }
             }
-            if let Some(fc) = part.get("functionCall") {
-                let name = fc.get("name").and_then(|v| v.as_str())
-                    .ok_or("Gemini function call missing name")?.to_string();
-                let raw_args = fc.get("args").cloned().unwrap_or_else(|| json!({}));
-                let args = if let Some(arg_str) = raw_args.as_str() {
-                    serde_json::from_str(arg_str)?
-                } else {
-                    raw_args
-                };
-                function_calls.push((name, args));
+        }
+        // Double flush — Gemini's last event may not end with \n\n
+        for event in parser.flush() {
+            for action in parse_gemini_sse(&event, &mut state) {
+                match action {
+                    StreamAction::TextDelta { text, .. } => text_content.push_str(&text),
+                    StreamAction::MessageComplete { stop_reason: sr } => stop_reason = sr,
+                    StreamAction::ToolUseStart { name, thought_signature, .. } => {
+                        function_calls.push((name, String::new(), thought_signature));
+                    }
+                    StreamAction::InputJsonDelta { partial_json, .. } => {
+                        if let Some(fc) = function_calls.last_mut() {
+                            fc.1.push_str(&partial_json);
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
 
         if function_calls.is_empty() {
-            if finish_reason == "STOP" {
-                session.finalize(text_fragments.join(""), true, None);
+            if stop_reason == StopReason::EndTurn {
+                session.finalize(text_content, true, None);
                 return Ok(session);
             }
             session.finalize(
-                text_fragments.join(""),
+                text_content,
                 false,
-                Some(format!("Gemini stopped without tool calls (finishReason={})", finish_reason)),
+                Some(format!("Gemini stopped without tool calls (stop_reason={:?})", stop_reason)),
             );
             return Ok(session);
         }
 
-        // Add model response to conversation
-        let mut model_content = content;
-        if model_content.get("role").is_none() {
-            if let Some(obj) = model_content.as_object_mut() {
-                obj.insert("role".to_string(), json!("model"));
-            }
+        // Build model response for conversation history (preserve thoughtSignature!)
+        let mut model_parts: Vec<Value> = Vec::new();
+        if !text_content.is_empty() {
+            model_parts.push(json!({"text": text_content}));
         }
-        contents.push(model_content);
+        for (name, args_str, thought_sig) in &function_calls {
+            let args: Value = serde_json::from_str(args_str).unwrap_or_else(|_| json!({}));
+            let mut fc_part = json!({"functionCall": {"name": name, "args": args}});
+            if let Some(sig) = thought_sig {
+                fc_part["thoughtSignature"] = json!(sig);
+            }
+            model_parts.push(fc_part);
+        }
+        contents.push(json!({"role": "model", "parts": model_parts}));
 
         // Execute tool calls
-        for (name, args) in function_calls {
+        for (name, args_str, _) in function_calls {
             events::emit_participant_step("gemini", step_num, Some(&name));
 
+            let args: Value = serde_json::from_str(&args_str).unwrap_or_else(|_| json!({}));
             let tool_result = tools::execute_tool(&name, args.clone(), project_path).await;
             session.add_tool_call(
                 &name,

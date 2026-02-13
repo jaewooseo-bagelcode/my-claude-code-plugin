@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIProxyConfig {
@@ -51,7 +52,7 @@ impl AIProxyConfig {
         if self.no_aiproxy {
             format!("https://generativelanguage.googleapis.com{}", path)
         } else {
-            format!("{}/google{}", self.base_url.trim_end_matches('/'), path)
+            format!("{}/google-vertex{}", self.base_url.trim_end_matches('/'), path)
         }
     }
 
@@ -120,6 +121,14 @@ pub fn load_config() -> Result<AIProxyConfig, String> {
             gemini_api_key: None,
         })
     }
+}
+
+/// Build a shared HTTP client with connect timeout (prevents DNS/TCP hang).
+pub fn build_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to build HTTP client")
 }
 
 /// Load project memory files (CLAUDE.md, .claude/rules/*.md) as context

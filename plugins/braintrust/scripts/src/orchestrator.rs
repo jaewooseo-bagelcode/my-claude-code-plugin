@@ -1,10 +1,14 @@
-use crate::config::AIProxyConfig;
+use crate::config::{self, AIProxyConfig};
 use crate::events;
 use crate::providers;
 use crate::session::{self, AiResponse, BraintrustIteration, BraintrustResult, ParticipantSession};
+use crate::sse::{SseParser, StreamAction, IDLE_TIMEOUT};
+use crate::sse::anthropic::parse_anthropic_sse;
 use crate::tools;
+use futures_util::StreamExt;
 use serde_json::json;
 use std::time::Instant;
+use tokio::time::timeout;
 
 const MAX_RETRIES: u32 = 3;
 const RETRY_BASE_DELAY_MS: u64 = 2000;
@@ -548,19 +552,20 @@ async fn run_claude_chair(
     prompt: &str,
     config: &AIProxyConfig,
 ) -> Result<AiResponse, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = config::build_http_client();
 
     let request_body = json!({
         "model": "claude-opus-4-6",
         "max_tokens": 16000,
         "system": system_prompt,
         "messages": [{"role": "user", "content": prompt}],
-        "thinking": { "type": "enabled", "budget_tokens": 10000 }
+        "thinking": { "type": "enabled", "budget_tokens": 10000 },
+        "stream": true,
     });
 
     let (auth_header, auth_value) = config.anthropic_auth();
     let url = config.anthropic_url("/v1/messages");
-    events::log_stderr(&format!("[braintrust/chair] POST {} (claude, non-streaming)", url));
+    events::log_stderr(&format!("[braintrust/chair] POST {} (claude, streaming)", url));
 
     let response = client
         .post(&url)
@@ -576,19 +581,51 @@ async fn run_claude_chair(
         return Err(format!("Chair Claude API error ({}): {}", status, body).into());
     }
 
-    let result: serde_json::Value = response.json().await?;
-    let content = result.get("content")
-        .and_then(|c| c.as_array())
-        .and_then(|arr| {
-            arr.iter()
-                .find(|block| block.get("type").and_then(|t| t.as_str()) == Some("text"))
-                .and_then(|block| block.get("text").and_then(|t| t.as_str()))
-        })
-        .ok_or("No text in Claude chair response")?;
+    // SSE streaming loop
+    let mut parser = SseParser::new();
+    let mut byte_stream = response.bytes_stream();
+    let mut content = String::new();
+
+    loop {
+        match timeout(IDLE_TIMEOUT, byte_stream.next()).await {
+            Ok(Some(Ok(chunk))) => {
+                for event in parser.feed(&chunk) {
+                    if let Some(action) = parse_anthropic_sse(&event) {
+                        match action {
+                            StreamAction::TextDelta { text, .. } => content.push_str(&text),
+                            StreamAction::Error(msg) => {
+                                return Err(format!("Chair Claude SSE error: {}", msg).into());
+                            }
+                            _ => {} // thinking, content_block_stop, message_complete — ignored for chair
+                        }
+                    }
+                }
+            }
+            Ok(Some(Err(e))) => return Err(format!("Chair Claude stream error: {}", e).into()),
+            Ok(None) => break,
+            Err(_) => {
+                if !content.is_empty() {
+                    // Return partial content on idle timeout
+                    break;
+                }
+                return Err("Chair Claude stream idle timeout (60s)".into());
+            }
+        }
+    }
+    // Flush
+    for event in parser.flush() {
+        if let Some(StreamAction::TextDelta { text, .. }) = parse_anthropic_sse(&event) {
+            content.push_str(&text);
+        }
+    }
+
+    if content.is_empty() {
+        return Err("No text in Claude chair response".into());
+    }
 
     Ok(AiResponse {
         provider: "claude".to_string(),
-        content: content.to_string(),
+        content,
         model: "claude-opus-4-6".to_string(),
         success: true,
         error: None,

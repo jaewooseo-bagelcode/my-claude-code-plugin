@@ -1,38 +1,16 @@
-use crate::config::AIProxyConfig;
+use crate::config::{self, AIProxyConfig};
 use crate::events;
 use crate::session::ParticipantSession;
+use crate::sse::{SseParser, StreamAction, StopReason, IDLE_TIMEOUT};
+use crate::sse::openai::{parse_openai_responses_sse, parse_openai_chat_sse};
 use crate::tools::{self, ToolDefinition};
-use serde::Deserialize;
+use futures_util::StreamExt;
 use serde_json::{json, Value};
+use tokio::time::timeout;
 
 const MAX_TOOL_CALLS: usize = 100;
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct GptResponse {
-    id: Option<String>,
-    output: Option<Vec<OutputItem>>,
-    stop_reason: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OutputItem {
-    #[serde(rename = "type")]
-    item_type: String,
-    name: Option<String>,
-    call_id: Option<String>,
-    arguments: Option<String>,
-    content: Option<Vec<MessageContent>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MessageContent {
-    #[serde(rename = "type")]
-    content_type: String,
-    text: Option<String>,
-}
-
-/// GPT-5.2 participant with tool loop (Responses API)
+/// GPT-5.2 participant with tool loop (Responses API, SSE streaming)
 pub async fn call_gpt52_participant(
     system_prompt: &str,
     user_prompt: &str,
@@ -40,7 +18,7 @@ pub async fn call_gpt52_participant(
     project_path: &str,
     config: &AIProxyConfig,
 ) -> Result<ParticipantSession, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = config::build_http_client();
     let mut session = ParticipantSession::new("openai", "gpt-5.2");
 
     let request_tools: Vec<Value> = tools.iter().map(|tool| {
@@ -65,12 +43,13 @@ pub async fn call_gpt52_participant(
             "input": input_items,
             "instructions": system_prompt,
             "reasoning": { "effort": "medium" },
+            "stream": true,
         });
 
         let url = config.openai_url("/v1/responses");
         let token = config.openai_token();
         events::log_stderr(&format!(
-            "[braintrust/openai] POST {} (step {})", url, step_num
+            "[braintrust/openai] POST {} (step {}, streaming)", url, step_num
         ));
 
         let response = match client
@@ -91,81 +70,120 @@ pub async fn call_gpt52_participant(
         };
 
         let status = response.status();
-        let response_text = response.text().await?;
-
         if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
             events::log_stderr(&format!(
                 "[braintrust/openai] API error {}: {}",
-                status, &response_text[..response_text.len().min(500)]
+                status, &body[..body.len().min(500)]
             ));
-            session.finalize(String::new(), false, Some(format!("GPT-5.2 API error ({}): {}", status, response_text)));
+            session.finalize(String::new(), false, Some(format!("GPT-5.2 API error ({}): {}", status, body)));
             return Ok(session);
         }
 
-        let gpt_response: GptResponse = serde_json::from_str(&response_text)
-            .map_err(|e| format!("Failed to parse GPT response: {}", e))?;
+        // SSE streaming loop
+        let mut parser = SseParser::new();
+        let mut byte_stream = response.bytes_stream();
+        let mut step_text = String::new();
+        // tool_calls: (call_id, name, args_json_buffer)
+        let mut tool_calls: Vec<(String, String, String)> = Vec::new();
+        let mut stop_reason = StopReason::Unknown;
 
-        let output_items = match gpt_response.output {
-            Some(items) => items,
-            None => return Err("No output in GPT response".into()),
-        };
-
-        let mut has_tool_calls = false;
-
-        for item in &output_items {
-            match item.item_type.as_str() {
-                "message" => {
-                    if let Some(content_blocks) = &item.content {
-                        for block in content_blocks {
-                            if block.content_type == "output_text" {
-                                if let Some(text) = &block.text {
-                                    all_output_content.push_str(text);
+        loop {
+            match timeout(IDLE_TIMEOUT, byte_stream.next()).await {
+                Ok(Some(Ok(chunk))) => {
+                    for event in parser.feed(&chunk) {
+                        if let Some(action) = parse_openai_responses_sse(&event) {
+                            match action {
+                                StreamAction::TextDelta { text, .. } => {
+                                    step_text.push_str(&text);
                                 }
+                                StreamAction::ToolUseStart { id, name, .. } => {
+                                    tool_calls.push((id, name, String::new()));
+                                }
+                                StreamAction::InputJsonDelta { partial_json, .. } => {
+                                    if let Some(tc) = tool_calls.last_mut() {
+                                        tc.2.push_str(&partial_json);
+                                    }
+                                }
+                                StreamAction::InputJsonFinal { json, .. } => {
+                                    // Replace delta buffer with final JSON
+                                    if let Some(tc) = tool_calls.last_mut() {
+                                        tc.2 = json;
+                                    }
+                                }
+                                StreamAction::MessageComplete { stop_reason: sr } => {
+                                    stop_reason = sr;
+                                }
+                                StreamAction::Error(msg) => {
+                                    return Err(format!("OpenAI SSE error: {}", msg).into());
+                                }
+                                _ => {}
                             }
                         }
                     }
                 }
-                "function_call" => {
-                    if let (Some(name), Some(call_id)) = (&item.name, &item.call_id) {
-                        has_tool_calls = true;
-                        let args_str = item.arguments.as_deref().unwrap_or("{}");
-                        let args: Value = serde_json::from_str(args_str).unwrap_or_else(|_| json!({}));
-
-                        input_items.push(json!({
-                            "type": "function_call",
-                            "call_id": call_id,
-                            "name": name,
-                            "arguments": args_str,
-                        }));
-
-                        events::emit_participant_step("openai", step_num, Some(name));
-
-                        let tool_result = tools::execute_tool(name, args.clone(), project_path).await;
-                        let tool_output = match &tool_result {
-                            Ok(s) => Ok(s.clone()),
-                            Err(e) => Err(e.to_string()),
-                        };
-                        session.add_tool_call(name, args, tool_output);
-
-                        let output_str = match tool_result {
-                            Ok(result) => result,
-                            Err(e) => format!("Tool error: {}", e),
-                        };
-
-                        input_items.push(json!({
-                            "type": "function_call_output",
-                            "call_id": call_id,
-                            "output": output_str
-                        }));
+                Ok(Some(Err(e))) => return Err(format!("OpenAI stream error: {}", e).into()),
+                Ok(None) => break, // Stream ended
+                Err(_) => {
+                    // Idle timeout
+                    if !all_output_content.is_empty() || !step_text.is_empty() {
+                        all_output_content.push_str(&step_text);
+                        session.finalize(all_output_content, true, Some("Stream idle timeout (60s)".into()));
+                        return Ok(session);
                     }
+                    return Err("OpenAI stream idle timeout (60s)".into());
                 }
-                _ => {} // reasoning, etc
+            }
+        }
+        // Flush remaining
+        for event in parser.flush() {
+            if let Some(action) = parse_openai_responses_sse(&event) {
+                match action {
+                    StreamAction::TextDelta { text, .. } => step_text.push_str(&text),
+                    StreamAction::MessageComplete { stop_reason: sr } => stop_reason = sr,
+                    _ => {}
+                }
             }
         }
 
-        if !has_tool_calls {
-            break;
+        all_output_content.push_str(&step_text);
+
+        // Process tool calls
+        if stop_reason == StopReason::ToolUse && !tool_calls.is_empty() {
+            for (call_id, name, args_str) in tool_calls {
+                let args: Value = serde_json::from_str(&args_str).unwrap_or_else(|_| json!({}));
+
+                input_items.push(json!({
+                    "type": "function_call",
+                    "call_id": call_id,
+                    "name": name,
+                    "arguments": args_str,
+                }));
+
+                events::emit_participant_step("openai", step_num, Some(&name));
+
+                let tool_result = tools::execute_tool(&name, args.clone(), project_path).await;
+                let tool_output = match &tool_result {
+                    Ok(s) => Ok(s.clone()),
+                    Err(e) => Err(e.to_string()),
+                };
+                session.add_tool_call(&name, args, tool_output);
+
+                let output_str = match tool_result {
+                    Ok(result) => result,
+                    Err(e) => format!("Tool error: {}", e),
+                };
+
+                input_items.push(json!({
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": output_str
+                }));
+            }
+            continue; // Next tool loop iteration
         }
+
+        break; // No tool calls, done
     }
 
     if all_output_content.is_empty() {
@@ -176,25 +194,26 @@ pub async fn call_gpt52_participant(
     Ok(session)
 }
 
-/// GPT-5.2 chair (Chat Completions API, no tools)
+/// GPT-5.2 chair (Chat Completions API, SSE streaming, no tools)
 pub async fn call_gpt52_chair(
     system_prompt: &str,
     prompt: &str,
     config: &AIProxyConfig,
 ) -> Result<crate::session::AiResponse, Box<dyn std::error::Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+    let client = config::build_http_client();
 
     let request_body = json!({
         "model": "gpt-5.2",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
-        ]
+        ],
+        "stream": true,
     });
 
     let url = config.openai_url("/v1/chat/completions");
     let token = config.openai_token();
-    events::log_stderr(&format!("[braintrust/chair] POST {} (non-streaming)", url));
+    events::log_stderr(&format!("[braintrust/chair] POST {} (streaming)", url));
 
     let response = client
         .post(&url)
@@ -209,19 +228,51 @@ pub async fn call_gpt52_chair(
         return Err(format!("Chair API error ({}): {}", status, body).into());
     }
 
-    let result: Value = response.json().await?;
+    // SSE streaming loop
+    let mut parser = SseParser::new();
+    let mut byte_stream = response.bytes_stream();
+    let mut content = String::new();
 
-    let content = result
-        .get("choices")
-        .and_then(|c| c.get(0))
-        .and_then(|c| c.get("message"))
-        .and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str())
-        .ok_or("OpenAI response missing content")?;
+    loop {
+        match timeout(IDLE_TIMEOUT, byte_stream.next()).await {
+            Ok(Some(Ok(chunk))) => {
+                for event in parser.feed(&chunk) {
+                    if let Some(action) = parse_openai_chat_sse(&event) {
+                        match action {
+                            StreamAction::TextDelta { text, .. } => content.push_str(&text),
+                            StreamAction::Error(msg) => {
+                                return Err(format!("Chair SSE error: {}", msg).into());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Ok(Some(Err(e))) => return Err(format!("Chair stream error: {}", e).into()),
+            Ok(None) => break,
+            Err(_) => {
+                if !content.is_empty() {
+                    // Return partial content on idle timeout
+                    break;
+                }
+                return Err("Chair stream idle timeout (60s)".into());
+            }
+        }
+    }
+    // Flush
+    for event in parser.flush() {
+        if let Some(StreamAction::TextDelta { text, .. }) = parse_openai_chat_sse(&event) {
+            content.push_str(&text);
+        }
+    }
+
+    if content.is_empty() {
+        return Err("OpenAI chair response missing content".into());
+    }
 
     Ok(crate::session::AiResponse {
         provider: "openai".to_string(),
-        content: content.to_string(),
+        content,
         model: "gpt-5.2".to_string(),
         success: true,
         error: None,
