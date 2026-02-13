@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -166,7 +167,7 @@ func getToolsSchema() []map[string]interface{} {
 // executeReview runs the tool execution loop for code review.
 // Uses previous_response_id chaining instead of conversations API.
 // Returns the last response ID for session persistence.
-func executeReview(apiKey, model, reasoningEffort, systemPrompt, previousResponseID, reviewPrompt, repoRoot string, maxIters int) (string, error) {
+func executeReview(apiKey, model, reasoningEffort, systemPrompt, previousResponseID, reviewPrompt, repoRoot string, maxIters int, logger *Logger) (string, error) {
 	ctx := context.Background()
 	tools := getToolsSchema()
 
@@ -181,6 +182,11 @@ func executeReview(apiKey, model, reasoningEffort, systemPrompt, previousRespons
 	}
 
 	for iteration := 0; iteration < maxIters; iteration++ {
+		iterStart := time.Now()
+		logger.Log("iteration_start", iteration, map[string]interface{}{
+			"iteration": iteration,
+		})
+
 		// Build payload
 		payload := map[string]interface{}{
 			"model":               model,
@@ -209,15 +215,33 @@ func executeReview(apiKey, model, reasoningEffort, systemPrompt, previousRespons
 		}
 
 		// Call Responses API
+		logger.Log("api_call_start", iteration, map[string]interface{}{
+			"model": model,
+		})
+		apiStart := time.Now()
+
 		respData, err := callResponsesAPI(ctx, apiKey, payload)
+		apiDuration := time.Since(apiStart).Milliseconds()
+
 		if err != nil {
+			logger.Log("api_call_error", iteration, map[string]interface{}{
+				"duration_ms": apiDuration,
+				"error":       err.Error(),
+			})
 			return lastResponseID, fmt.Errorf("API error: %w", err)
 		}
 
 		// Track response ID for chaining
+		respID := ""
 		if id, ok := respData["id"].(string); ok {
 			lastResponseID = id
+			respID = id
 		}
+
+		logger.Log("api_call_success", iteration, map[string]interface{}{
+			"duration_ms": apiDuration,
+			"response_id": respID,
+		})
 
 		// Extract tool calls and text
 		toolCalls, outputText := extractCallsAndText(respData)
@@ -229,6 +253,9 @@ func executeReview(apiKey, model, reasoningEffort, systemPrompt, previousRespons
 
 		if len(toolCalls) == 0 {
 			// No tool calls => review complete
+			logger.Log("review_complete", iteration, map[string]interface{}{
+				"reason": "no_tool_calls",
+			})
 			return lastResponseID, nil
 		}
 
@@ -280,8 +307,17 @@ func executeReview(apiKey, model, reasoningEffort, systemPrompt, previousRespons
 					return
 				}
 
+				toolStart := time.Now()
 				result := executeTool(repoRoot, tName, args)
+				toolDuration := time.Since(toolStart).Milliseconds()
 				resultJSON, _ := json.Marshal(result)
+
+				logger.Log("tool_call", iteration, map[string]interface{}{
+					"tool":        tName,
+					"args":        summarizeArgs(aStr, 200),
+					"ok":          result.OK,
+					"duration_ms": toolDuration,
+				})
 
 				ch <- indexedOutput{idx, map[string]interface{}{
 					"type":    "function_call_output",
@@ -308,9 +344,17 @@ func executeReview(apiKey, model, reasoningEffort, systemPrompt, previousRespons
 			}
 		}
 
+		logger.Log("iteration_end", iteration, map[string]interface{}{
+			"tool_count":  len(toolCalls),
+			"duration_ms": time.Since(iterStart).Milliseconds(),
+		})
+
 		inputItems = filteredOutputs
 	}
 
+	logger.Log("review_complete", maxIters-1, map[string]interface{}{
+		"reason": "max_iterations",
+	})
 	return lastResponseID, fmt.Errorf("reached MAX_ITERS=%d without completion", maxIters)
 }
 

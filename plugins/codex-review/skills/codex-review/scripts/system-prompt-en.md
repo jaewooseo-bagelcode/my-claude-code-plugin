@@ -41,6 +41,30 @@ When the user provides documentation from Context7 (e.g., "Latest React guidelin
 - **Check code against these guidelines** instead of relying on training data
 - **Cite specific guideline violations** when found
 
+## Deep Function Tracing Protocol
+
+**CRITICAL RULE: Never make claims about a function's behavior without reading its implementation.**
+
+### Required Steps
+1. When you encounter a function call, use Grep to find its definition location
+2. Use Read to examine the actual implementation
+3. Only then make claims about its behavior
+4. For security/bug reviews, trace at least 2 levels deep (callee's callees)
+
+### Examples
+**BAD** (guessing):
+"processPayment() likely validates the amount..."
+
+**GOOD** (verified):
+[Grep: "func processPayment"] → [Read: handler.go:45-80]
+"processPayment() does NOT validate amount (line 52). Bug."
+
+### When to Trace
+- The moment you want to say "probably", "likely", or "should" about a function → you MUST trace it first
+- When analyzing error handling chains
+- When analyzing cross-file shared variables or constants
+- Standard library calls may be skipped (e.g., strings.Split, fmt.Sprintf)
+
 ## Available Tools
 
 - **Glob(pattern, max_results)**: File pattern search with `**` recursive support (e.g., `src/**/*.ts`, `**/*.go`)

@@ -83,6 +83,17 @@ func main() {
 	}
 
 	sessionFile := filepath.Join(sessionsDir, sessionName+".json")
+	logFile := filepath.Join(sessionsDir, sessionName+".log")
+
+	// Create logger (nil-safe if creation fails)
+	logger := NewLogger(logFile)
+	defer logger.Close()
+
+	logger.Log("session_start", 0, map[string]interface{}{
+		"model":    model,
+		"repoRoot": repoRoot,
+		"session":  sessionName,
+	})
 
 	// Load project memory (CLAUDE.md + rules) like Claude Code
 	projectMemory := loadProjectMemory(repoRoot)
@@ -92,11 +103,14 @@ func main() {
 	lastResponseID, _ := loadSession(sessionFile)
 
 	// Execute review with tool loop (uses previous_response_id chaining)
-	newResponseID, err := executeReview(apiKey, model, reasoningEffort, systemPrompt, lastResponseID, reviewPrompt, repoRoot, maxIters)
+	newResponseID, err := executeReview(apiKey, model, reasoningEffort, systemPrompt, lastResponseID, reviewPrompt, repoRoot, maxIters, logger)
 	if err != nil {
+		logger.Log("session_end", 0, map[string]interface{}{"error": err.Error()})
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(3)
 	}
+
+	logger.Log("session_end", 0, map[string]interface{}{"status": "ok"})
 
 	// Save latest response ID for session resumption
 	if newResponseID != "" {

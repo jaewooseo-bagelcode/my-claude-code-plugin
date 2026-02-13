@@ -90,6 +90,17 @@ pub async fn run_braintrust(
         events::emit_participant_completed("Gemini", gemini_session.success, gemini_start.elapsed().as_millis() as u64);
         events::emit_participant_completed("Claude", claude_session.success, claude_start.elapsed().as_millis() as u64);
 
+        session::log_debug(
+            &meeting_id, "info", "system", "participants_completed",
+            &format!("Iteration {} participants completed", iter_num),
+            Some(json!({
+                "iteration": iter_num,
+                "gpt_success": gpt_session.success,
+                "gemini_success": gemini_session.success,
+                "claude_success": claude_session.success,
+            })),
+        );
+
         let iteration = BraintrustIteration {
             iteration: iter_num,
             question: current_question.clone(),
@@ -111,6 +122,12 @@ pub async fn run_braintrust(
         // Chair analysis: determine if follow-up needed
         events::emit_chair_analyzing(iter_num);
 
+        session::log_debug(
+            &meeting_id, "info", "chair", "analysis_start",
+            &format!("Chair analyzing iteration {}", iter_num),
+            Some(json!({ "iteration": iter_num })),
+        );
+
         let analysis_prompt = build_chair_analysis_prompt(
             &request.agenda,
             request.context.as_deref(),
@@ -120,6 +137,12 @@ pub async fn run_braintrust(
         match run_chair(&chair_system_prompt, &analysis_prompt, &config, &request.chair_model).await {
             Ok(analysis_response) => {
                 let content = analysis_response.content.trim().to_string();
+
+                session::log_debug(
+                    &meeting_id, "info", "chair", "analysis_complete",
+                    &format!("Chair analysis complete for iteration {}", iter_num),
+                    Some(json!({ "iteration": iter_num, "decision": if content.starts_with("CONTINUE:") { "continue" } else { "done" } })),
+                );
 
                 if let Some(follow_up) = content.strip_prefix("CONTINUE:") {
                     let next_question = follow_up.trim().to_string();
@@ -134,6 +157,11 @@ pub async fn run_braintrust(
                 }
             }
             Err(e) => {
+                session::log_debug(
+                    &meeting_id, "error", "chair", "analysis_error",
+                    &format!("Chair analysis failed: {}", e),
+                    Some(json!({ "iteration": iter_num, "error": e.to_string() })),
+                );
                 events::log_stderr(&format!("[braintrust] Chair analysis failed: {}, proceeding to synthesis", e));
                 break;
             }
@@ -144,6 +172,12 @@ pub async fn run_braintrust(
 
     // Final chair synthesis
     events::emit_chair_synthesizing();
+
+    session::log_debug(
+        &meeting_id, "info", "chair", "synthesis_start",
+        "Chair starting final synthesis",
+        Some(json!({ "total_iterations": total_iterations })),
+    );
 
     let chair_prompt = build_final_synthesis_prompt(
         &request.agenda,
@@ -157,10 +191,22 @@ pub async fn run_braintrust(
 
     events::emit_chair_completed(chair_elapsed);
 
+    session::log_debug(
+        &meeting_id, "info", "chair", "synthesis_complete",
+        &format!("Chair synthesis completed in {}ms", chair_elapsed),
+        Some(json!({ "elapsed_ms": chair_elapsed })),
+    );
+
     let _ = session::save_chair_summary(&meeting_id, &chair_response);
 
     let elapsed_ms = start.elapsed().as_millis() as u64;
     let _ = session::update_meeting_status(&meeting_id, "completed", elapsed_ms);
+
+    session::log_debug(
+        &meeting_id, "info", "system", "meeting_complete",
+        &format!("Meeting completed in {}ms ({} iterations)", elapsed_ms, total_iterations),
+        Some(json!({ "elapsed_ms": elapsed_ms, "total_iterations": total_iterations })),
+    );
 
     // Build raw_responses from last iteration
     let last_iteration = all_iterations.last();
@@ -289,6 +335,17 @@ pub async fn resume_braintrust(
         events::emit_participant_completed("Gemini", gemini_session.success, gemini_start.elapsed().as_millis() as u64);
         events::emit_participant_completed("Claude", claude_session.success, claude_start.elapsed().as_millis() as u64);
 
+        session::log_debug(
+            &meeting_id, "info", "system", "participants_completed",
+            &format!("Resume iteration {} participants completed", global_iter),
+            Some(json!({
+                "iteration": global_iter,
+                "gpt_success": gpt_session.success,
+                "gemini_success": gemini_session.success,
+                "claude_success": claude_session.success,
+            })),
+        );
+
         let iteration = BraintrustIteration {
             iteration: global_iter,
             question: current_question.clone(),
@@ -308,11 +365,25 @@ pub async fn resume_braintrust(
 
         // Chair analysis
         events::emit_chair_analyzing(global_iter);
+
+        session::log_debug(
+            &meeting_id, "info", "chair", "analysis_start",
+            &format!("Chair analyzing resume iteration {}", global_iter),
+            Some(json!({ "iteration": global_iter })),
+        );
+
         let analysis_prompt = build_chair_analysis_prompt(&meta.agenda, meta.context.as_deref(), &all_iterations);
 
         match run_chair(&chair_system_prompt, &analysis_prompt, &config, &request.chair_model).await {
             Ok(analysis_response) => {
                 let content = analysis_response.content.trim().to_string();
+
+                session::log_debug(
+                    &meeting_id, "info", "chair", "analysis_complete",
+                    &format!("Chair analysis complete for resume iteration {}", global_iter),
+                    Some(json!({ "iteration": global_iter, "decision": if content.starts_with("CONTINUE:") { "continue" } else { "done" } })),
+                );
+
                 if let Some(follow_up) = content.strip_prefix("CONTINUE:") {
                     let next_question = follow_up.trim().to_string();
                     if next_question.is_empty() { break; }
@@ -323,6 +394,11 @@ pub async fn resume_braintrust(
                 }
             }
             Err(e) => {
+                session::log_debug(
+                    &meeting_id, "error", "chair", "analysis_error",
+                    &format!("Chair analysis failed on resume: {}", e),
+                    Some(json!({ "iteration": global_iter, "error": e.to_string() })),
+                );
                 events::log_stderr(&format!("[braintrust] Chair analysis failed: {}, proceeding to synthesis", e));
                 break;
             }
@@ -331,9 +407,24 @@ pub async fn resume_braintrust(
 
     // Final synthesis
     events::emit_chair_synthesizing();
+
+    session::log_debug(
+        &meeting_id, "info", "chair", "synthesis_start",
+        "Chair starting final synthesis (resume)",
+        Some(json!({ "total_iterations": all_iterations.len() })),
+    );
+
     let chair_prompt = build_final_synthesis_prompt(&meta.agenda, meta.context.as_deref(), &all_iterations);
+    let chair_start = Instant::now();
     let chair_response = run_chair(&chair_system_prompt, &chair_prompt, &config, &request.chair_model).await?;
+    let chair_elapsed = chair_start.elapsed().as_millis() as u64;
     let _ = session::save_chair_summary(&meeting_id, &chair_response);
+
+    session::log_debug(
+        &meeting_id, "info", "chair", "synthesis_complete",
+        &format!("Chair synthesis completed in {}ms (resume)", chair_elapsed),
+        Some(json!({ "elapsed_ms": chair_elapsed })),
+    );
 
     let elapsed_ms = start.elapsed().as_millis() as u64;
     let _ = session::update_meeting_status(&meeting_id, "completed", elapsed_ms);
@@ -342,6 +433,12 @@ pub async fn resume_braintrust(
     let raw_responses = all_iterations.last()
         .map(|it| it.participant_sessions.iter().map(|s| s.to_ai_response()).collect())
         .unwrap_or_default();
+
+    session::log_debug(
+        &meeting_id, "info", "system", "meeting_complete",
+        &format!("Resumed meeting completed in {}ms ({} iterations)", elapsed_ms, total_iterations),
+        Some(json!({ "elapsed_ms": elapsed_ms, "total_iterations": total_iterations })),
+    );
 
     events::emit_meeting_completed(elapsed_ms, total_iterations);
 
@@ -362,16 +459,28 @@ async fn run_participant_with_retry(
     tools: &[tools::ToolDefinition],
     project_path: &str,
     config: &AIProxyConfig,
-    _meeting_id: &str,
+    meeting_id: &str,
 ) -> Result<ParticipantSession, Box<dyn std::error::Error + Send + Sync>> {
     let mut last_error: Option<Box<dyn std::error::Error + Send + Sync>> = None;
 
     for attempt in 0..MAX_RETRIES {
         if attempt > 0 {
             let delay_ms = RETRY_BASE_DELAY_MS * (1 << (attempt - 1));
+            session::log_debug(
+                meeting_id, "warn", provider, "retry",
+                &format!("Retry {}/{} after {}ms", attempt, MAX_RETRIES - 1, delay_ms),
+                Some(json!({ "attempt": attempt, "delay_ms": delay_ms })),
+            );
             events::log_stderr(&format!("[braintrust/{}] Retry {}/{} after {}ms...", provider, attempt, MAX_RETRIES - 1, delay_ms));
             tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
         }
+
+        session::log_debug(
+            meeting_id, "debug", provider, "api_call_start",
+            &format!("{} API call attempt {}", provider, attempt + 1),
+            Some(json!({ "attempt": attempt + 1 })),
+        );
+        let call_start = Instant::now();
 
         let result = match provider {
             "openai" => providers::openai::call_gpt52_participant(system_prompt, user_prompt, tools, project_path, config).await,
@@ -380,9 +489,23 @@ async fn run_participant_with_retry(
             _ => return Err(format!("Unknown provider: {}", provider).into()),
         };
 
+        let elapsed_ms = call_start.elapsed().as_millis() as u64;
+
         match result {
-            Ok(session) => return Ok(session),
+            Ok(session) => {
+                session::log_debug(
+                    meeting_id, "info", provider, "api_call_success",
+                    &format!("{} completed in {}ms", provider, elapsed_ms),
+                    Some(json!({ "elapsed_ms": elapsed_ms })),
+                );
+                return Ok(session);
+            }
             Err(e) => {
+                session::log_debug(
+                    meeting_id, "error", provider, "api_call_error",
+                    &format!("{} attempt {} failed: {}", provider, attempt + 1, e),
+                    Some(json!({ "elapsed_ms": elapsed_ms, "error": e.to_string() })),
+                );
                 events::log_stderr(&format!("[braintrust/{}] Attempt {} failed: {}", provider, attempt + 1, e));
                 last_error = Some(e);
             }
@@ -390,8 +513,14 @@ async fn run_participant_with_retry(
     }
 
     // All retries exhausted — return a failed session instead of error (graceful degradation)
-    let mut session = ParticipantSession::new(provider, "unknown");
     let err_msg = last_error.map(|e| e.to_string()).unwrap_or_else(|| "Unknown error".to_string());
+    session::log_debug(
+        meeting_id, "error", provider, "all_retries_exhausted",
+        &format!("{} failed after {} retries: {}", provider, MAX_RETRIES, err_msg),
+        Some(json!({ "retries": MAX_RETRIES, "error": &err_msg })),
+    );
+
+    let mut session = ParticipantSession::new(provider, "unknown");
     session.finalize(
         format!("[{} failed after {} retries: {}]", provider, MAX_RETRIES, err_msg),
         false,
