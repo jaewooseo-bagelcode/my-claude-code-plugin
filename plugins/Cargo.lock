@@ -103,7 +103,7 @@ checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 
 [[package]]
 name = "braintrust"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "aiproxy-common",
  "clap",
@@ -186,7 +186,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "codex-review"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "aiproxy-common",
  "clap",

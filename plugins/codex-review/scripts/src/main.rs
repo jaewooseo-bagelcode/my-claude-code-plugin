@@ -2,11 +2,28 @@ mod project_memory;
 mod review_loop;
 
 use aiproxy_common::session::JsonlLogger;
+use clap::Parser;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const DEFAULT_MAX_ITERS: usize = 50;
+
+#[derive(Parser)]
+#[command(name = "codex-review")]
+#[command(about = "Professional code review using GPT-5.2-Codex")]
+struct Cli {
+    /// Session name (adjective-verb-noun pattern)
+    session_name: String,
+
+    /// Review context / prompt
+    review_context: Vec<String>,
+
+    /// Project root path (overrides auto-detection)
+    #[arg(long)]
+    project_path: Option<String>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SessionData {
@@ -15,14 +32,15 @@ struct SessionData {
 
 #[tokio::main]
 async fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 3 {
-        eprintln!(r#"Usage: codex-review "<session-name>" "<review-prompt>""#);
+    let cli = Cli::parse();
+
+    let session_name = &cli.session_name;
+    let review_prompt: String = cli.review_context.join(" ");
+
+    if review_prompt.is_empty() {
+        eprintln!(r#"Usage: codex-review [--project-path <path>] "<session-name>" "<review-context>""#);
         std::process::exit(2);
     }
-
-    let session_name = &args[1];
-    let review_prompt: String = args[2..].join(" ");
 
     // Validate session name
     let safe_session_re = Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._\-]{0,63}$").unwrap();
@@ -44,8 +62,8 @@ async fn main() {
     let reasoning_effort = get_env("REASONING_EFFORT", "high");
     let max_iters = get_env_int("MAX_ITERS", DEFAULT_MAX_ITERS);
 
-    // Detect repo root
-    let repo_root = detect_repo_root();
+    // Detect repo root: --project-path > git rev-parse > REPO_ROOT env > CWD walk-up
+    let repo_root = detect_repo_root(cli.project_path.as_deref());
 
     // Session management
     let sessions_dir = get_env("STATE_DIR", &format!("{}/.codex-sessions", repo_root));
@@ -119,13 +137,35 @@ fn get_env_int(key: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
-fn detect_repo_root() -> String {
+fn detect_repo_root(project_path: Option<&str>) -> String {
+    // 1. --project-path explicit argument (highest priority)
+    if let Some(path) = project_path {
+        return std::fs::canonicalize(path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| path.to_string());
+    }
+
+    // 2. git rev-parse --show-toplevel (works with worktrees)
+    if let Ok(output) = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+    {
+        if output.status.success() {
+            let toplevel = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !toplevel.is_empty() {
+                return toplevel;
+            }
+        }
+    }
+
+    // 3. REPO_ROOT env var
     if let Ok(root) = std::env::var("REPO_ROOT") {
         return std::fs::canonicalize(&root)
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or(root);
     }
 
+    // 4. CWD walk-up fallback
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut dir = cwd.clone();
 
