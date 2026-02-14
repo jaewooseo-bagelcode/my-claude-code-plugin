@@ -12,7 +12,7 @@ Execute Codex-powered code review with complete context preparation.
 ## Invocation
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/codex-review/bin/codex-review-darwin-arm64 "<session-name>" "<review-context>"
+${CLAUDE_PLUGIN_ROOT}/bin/codex-review-darwin-arm64 "<session-name>" "<review-context>"
 ```
 
 **Session Name**: Generate using plan file pattern (adjective-verb-noun).
@@ -300,7 +300,7 @@ PRIORITY: Security vulnerabilities first
 
 [Execute with Bash]
 Bash(
-    command=f'${CLAUDE_PLUGIN_ROOT}/skills/codex-review/bin/codex-review-darwin-arm64 "security-reviewing-turing" "{review_context}"',
+    command=f'${CLAUDE_PLUGIN_ROOT}/bin/codex-review-darwin-arm64 "security-reviewing-turing" "{review_context}"',
     description="Security review"
 )
 
@@ -353,7 +353,7 @@ PRIORITY: Security and bugs first
 """
 
 Bash(
-    command=f'${CLAUDE_PLUGIN_ROOT}/skills/codex-review/bin/codex-review-darwin-arm64 "comprehensive-reviewing-lovelace" "{review_context}"',
+    command=f'${CLAUDE_PLUGIN_ROOT}/bin/codex-review-darwin-arm64 "comprehensive-reviewing-lovelace" "{review_context}"',
     description="Comprehensive review"
 )
 ```
@@ -409,7 +409,7 @@ Check code compliance with these latest guidelines.
 
 # Step 4: Execute
 Bash(
-    command=f'${CLAUDE_PLUGIN_ROOT}/skills/codex-review/bin/codex-review-darwin-arm64 "{session_id}" "{review_context}"',
+    command=f'${CLAUDE_PLUGIN_ROOT}/bin/codex-review-darwin-arm64 "{session_id}" "{review_context}"',
     description="Security review"
 )
 ```

@@ -86,53 +86,12 @@ fn load_rules_dir(rules_dir: &PathBuf, rule_type: &str) -> Vec<String> {
     rules
 }
 
-/// Build the system prompt by loading the template and substituting variables.
+/// Build the system prompt by loading the embedded template and substituting variables.
 pub fn build_system_prompt(repo_root: &str, session_name: &str, project_memory: &str) -> String {
-    // Try to load system-prompt-en.md from the same directory as the binary
-    let prompt_path = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join("system-prompt-en.md")));
+    const SYSTEM_PROMPT: &str = include_str!("../../bin/system-prompt-en.md");
 
-    let template = prompt_path
-        .and_then(|p| std::fs::read_to_string(&p).ok());
-
-    match template {
-        Some(tmpl) => {
-            tmpl.replace("{repo_root}", repo_root)
-                .replace("{session_name}", session_name)
-                .replace("{project_memory}", project_memory)
-        }
-        None => {
-            // Fallback inline prompt
-            format!(
-                r#"# Code Review Expert - GPT-5.2-Codex
-
-You are a professional code reviewer with extensive experience.
-
-Repository Root: {}
-Session: {}
-
-## Project Guidelines
-
-{}
-
----
-
-**CRITICAL: You provide READ-ONLY analysis.** Identify issues and provide suggestions, but do NOT modify code.
-
-Available Tools: Glob (supports **), Grep (supports regex), Read, GitDiff
-
-Analyze code across 5 dimensions:
-- Bugs (Critical)
-- Security (High)
-- Performance (Medium)
-- Code Quality (Low)
-- Refactoring
-
-Provide detailed markdown reports with actionable suggestions.
-"#,
-                repo_root, session_name, project_memory
-            )
-        }
-    }
+    SYSTEM_PROMPT
+        .replace("{repo_root}", repo_root)
+        .replace("{session_name}", session_name)
+        .replace("{project_memory}", project_memory)
 }
