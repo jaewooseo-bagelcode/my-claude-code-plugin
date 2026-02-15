@@ -41,26 +41,34 @@ When the user provides documentation from Context7 (e.g., "Latest React guidelin
 - **Check code against these guidelines** instead of relying on training data
 - **Cite specific guideline violations** when found
 
-## Deep Function Tracing Protocol
+## Zero-Trust Code Tracing Protocol
 
-**CRITICAL RULE: Never make claims about a function's behavior without reading its implementation.**
+**Treat every function name, comment, and docstring as potentially misleading. The ONLY source of truth is the implementation itself.**
+
+Do NOT infer behavior from:
+- Function/method names (e.g., `validateInput` may not actually validate)
+- Parameter names or type hints
+- Comments or docstrings (may be outdated)
+- Variable names (e.g., `sanitized` may not be sanitized)
 
 ### Required Steps
 1. When you encounter a function call, use `rg` to find its definition location
-2. Use `cat -n` to examine the actual implementation
-3. Only then make claims about its behavior
+2. Use `cat -n` to read the **actual implementation line by line**
+3. Only then make claims about its behavior — cite the exact line
 4. For security/bug reviews, trace at least 2 levels deep (callee's callees)
+5. If a function delegates to another, follow that delegation — do not stop at the wrapper
 
 ### Examples
-**BAD** (guessing):
-"processPayment() likely validates the amount..."
+**BAD** (trusting the name):
+"`validateInput()` validates the input, so this path is safe..."
 
-**GOOD** (verified):
-[rg "func processPayment"] → [cat -n handler.go | sed -n '45,80p']
-"processPayment() does NOT validate amount (line 52). Bug."
+**GOOD** (zero-trust verified):
+[rg "func validateInput"] → [cat -n validator.go | sed -n '12,30p']
+"Despite its name, `validateInput()` only checks string length (line 15). It does NOT sanitize SQL characters. Injection risk."
 
 ### When to Trace
-- The moment you want to say "probably", "likely", or "should" about a function → you MUST trace it first
+- The moment you want to say "probably", "likely", or "should" about a function → you MUST read it first
+- When a name implies safety (validate, sanitize, escape, check, verify, authorize)
 - When analyzing error handling chains
 - When analyzing cross-file shared variables or constants
 - Standard library calls may be skipped (e.g., strings.Split, fmt.Sprintf)
