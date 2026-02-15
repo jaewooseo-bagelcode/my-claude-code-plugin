@@ -12,7 +12,7 @@ Execute Codex-powered code review with complete context preparation.
 ## Invocation
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/codex-review-darwin-arm64 \
+bash ${CLAUDE_PLUGIN_ROOT}/bin/codex-review.sh \
   --project-path "!`git rev-parse --show-toplevel`" \
   "<session-name>" "<review-context>"
 ```
@@ -34,7 +34,7 @@ PRIORITY: Critical security first
 """
 
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review-darwin-arm64 --project-path "$(git rev-parse --show-toplevel)" "security-reviewing-turing" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-reviewing-turing" "{review_context}"',
     description="Security review"
 )
 ```
@@ -140,7 +140,7 @@ PRIORITY: Modern React compliance, then security
 """
 
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review-darwin-arm64 --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
     description="React review"
 )
 ```
@@ -236,15 +236,14 @@ You (Claude Code):
 
 ## Environment
 
-**Auth** (one of, in priority order):
-1. `codeb login` — reads `~/.codeb/credentials.json` automatically (recommended)
-2. `OPENAI_API_KEY` env var — fallback for direct OpenAI usage
+**Prerequisites**:
+- `codex` CLI installed (`npm install -g @openai/codex`)
+- `codex login` completed (ChatGPT Pro subscription recommended)
 
 **Optional**:
-- `REASONING_EFFORT` (low/medium/high/xhigh, default: high)
-- `AIPROXY_API_BASE` — custom aiproxy URL (default: `https://aiproxy-api.backoffice.bagelgames.com/api/v1/passthrough/openai/v1`)
+- `OPENAI_MODEL` — override model (default: `gpt-5.2-codex`)
 
-**Sessions**: `{project}/.codex-sessions/` (project-isolated, auto-cleanup)
+**Sessions**: `{project}/.codex-sessions/` (project-isolated)
 
 ## Analysis Framework
 
@@ -258,9 +257,11 @@ Codex analyzes code across 5 dimensions:
 
 ## Tools Available to Codex
 
-- **Glob**: File pattern search (`src/**/*.ts`)
-- **Grep**: Code pattern search
-- **Read**: File reading with line ranges
+Codex CLI runs in a **read-only sandbox** with built-in shell tools:
+- `rg` (ripgrep): Code pattern search
+- `cat -n`: File reading with line numbers
+- `git diff`: Git diff for PR reviews
+- `find`, `ls`: File discovery
 
 ## Complete Workflow Examples
 
@@ -302,7 +303,7 @@ PRIORITY: Security vulnerabilities first
 
 [Execute with Bash]
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review-darwin-arm64 --project-path "$(git rev-parse --show-toplevel)" "security-reviewing-turing" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-reviewing-turing" "{review_context}"',
     description="Security review"
 )
 
@@ -355,7 +356,7 @@ PRIORITY: Security and bugs first
 """
 
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review-darwin-arm64 --project-path "$(git rev-parse --show-toplevel)" "comprehensive-reviewing-lovelace" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "comprehensive-reviewing-lovelace" "{review_context}"',
     description="Comprehensive review"
 )
 ```
@@ -411,7 +412,7 @@ Check code compliance with these latest guidelines.
 
 # Step 4: Execute
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review-darwin-arm64 --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
     description="Security review"
 )
 ```
