@@ -419,6 +419,58 @@ Bash(
 
 **This process should happen automatically** - don't ask user if they want Context7 docs.
 
+## Cross-Model Verification (Post-Review)
+
+After receiving Codex review output, **automatically spawn the `verify-review` agent** to cross-check findings against actual code. This provides cross-model verification: GPT-5.2 identifies issues, Claude verifies them by reading the actual source.
+
+### When to Verify
+
+- **Always verify** when the review contains Critical or High severity findings
+- **Skip verification** when:
+  - The review found no issues (score 9-10)
+  - User explicitly requests raw review only (e.g., "skip verification", "raw review")
+  - The review is a follow-up in an existing session
+
+### How to Trigger
+
+After receiving codex-review output, delegate to the `verify-review` agent:
+
+```
+Use the verify-review agent to validate the code review findings.
+Pass it the complete review output and the project root path.
+```
+
+The agent reads actual source files with Read/Grep/Glob to verify each finding, then returns a structured verification report with Confirmed / False Positive / Needs Context verdicts.
+
+### Presenting Results
+
+After verification completes, present a **unified report**:
+
+1. Show the original Codex review summary (issue counts, score)
+2. Show the verification summary table (confirmed vs false positive counts)
+3. **Highlight False Positives** prominently — these save developer time
+4. If confidence rate is below 70%, note that the review may need human judgment
+5. Recommend actions only for **confirmed Critical/High** findings
+
+**Example presentation**:
+```
+## Code Review Results
+
+### GPT-5.2-Codex Review
+[Original review summary — issues found, overall score]
+
+### Cross-Model Verification (Claude)
+Verified: 8 findings | Confirmed: 6 | False Positive: 1 | Needs Context: 1
+Confidence Rate: 75%
+
+### Confirmed Action Items
+1. [CRITICAL] SQL injection in auth.ts:45 — CONFIRMED
+2. [HIGH] Missing CSRF token in form.tsx:12 — CONFIRMED
+
+### False Positives (filtered out)
+- [HIGH] "Hardcoded secret in config.ts:3" — actually reads from env var
+```
+
 ## Reference Materials
 
 **Load these when needed for better review quality:**
