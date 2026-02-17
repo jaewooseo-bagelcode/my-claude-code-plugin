@@ -1,5 +1,6 @@
 .scs/
 .DS_Store
 .codex-sessions/
+.codex-review-cache/
 .braintrust-sessions/
 target/

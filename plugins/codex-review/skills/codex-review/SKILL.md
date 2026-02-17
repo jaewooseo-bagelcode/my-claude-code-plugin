@@ -244,6 +244,7 @@ You (Claude Code):
 - `OPENAI_MODEL` — override model (default: `gpt-5.2-codex`)
 
 **Sessions**: `{project}/.codex-sessions/` (project-isolated)
+**Cache**: `{project}/.codex-review-cache/` (reviews + verifications)
 
 ## Analysis Framework
 
@@ -307,12 +308,19 @@ Bash(
     description="Security review"
 )
 
-[Tell user immediately]
-"Delegated security review to subagent. Analyzing SQL injection vulnerability at line 45..."
+[Bash returns summary only]
+→ Critical: 1 | High: 1 | Medium: 2 | Low: 0
+→ Full report: .codex-review-cache/reviews/security-reviewing-turing.md
 
-[Subagent auto-returns results]
-[Parse output and summarize]
-"Review complete. Found critical SQL injection vulnerability in login function (line 45). Uses string concatenation instead of parameterized queries. Would you like me to implement the fix?"
+[Critical/High > 0 → trigger verification]
+Task(verify-review agent, review file path + project root)
+
+[Verification agent returns summary only]
+→ Confirmed: 2 | False Positive: 0 | Needs Context: 0
+→ Full report: .codex-review-cache/verifications/security-reviewing-turing.md
+
+[Present unified summary to user]
+"Review complete. 2 confirmed findings: SQL injection in auth.ts:45, missing input validation in auth.ts:78. Full details available in cache files."
 ```
 
 ### Example 2: Minimal Context - Ask First
@@ -365,7 +373,7 @@ Bash(
 ## Best Practices
 
 1. **Use conversation context**: Don't ask if you already know
-2. **Delegate to subagent**: Default to Bash subagent with haiku model for better UX
+2. **Summary-only output**: codex-review.sh returns severity counts + file path only; read full report from cache on demand
 3. **Fetch latest docs with Context7**: When code uses external libraries, query Context7 BEFORE invoking
 4. **Preview files**: Use Read tool to check file content and detect dependencies
 5. **Identify related files**: Check imports, dependencies, tests
@@ -421,54 +429,54 @@ Bash(
 
 ## Cross-Model Verification (Post-Review)
 
-After receiving Codex review output, **automatically spawn the `verify-review` agent** to cross-check findings against actual code. This provides cross-model verification: GPT-5.2 identifies issues, Claude verifies them by reading the actual source.
+After codex-review.sh completes, it saves the full review to a cache file and prints only a summary with severity counts and the file path.
 
 ### When to Verify
 
-- **Always verify** when the review contains Critical or High severity findings
-- **Skip verification** when:
-  - The review found no issues (score 9-10)
-  - User explicitly requests raw review only (e.g., "skip verification", "raw review")
-  - The review is a follow-up in an existing session
+- **Always verify** when Critical or High count > 0 in the summary
+- **Skip** when all counts are 0 (score 9-10)
+- **Skip** when user says "skip verification" or "raw review"
 
 ### How to Trigger
 
-After receiving codex-review output, delegate to the `verify-review` agent:
+Pass the **review file path** (not the content) to the verify-review agent:
 
 ```
 Use the verify-review agent to validate the code review findings.
-Pass it the complete review output and the project root path.
+Review file: {review_file_path}
+Project root: {project_root}
 ```
 
-The agent reads actual source files with Read/Grep/Glob to verify each finding, then returns a structured verification report with Confirmed / False Positive / Needs Context verdicts.
+The agent reads the review from the file independently, verifies each finding against actual source code, saves its full report to a file, and returns only a summary.
 
 ### Presenting Results
 
-After verification completes, present a **unified report**:
+Present the unified summary from both steps:
 
-1. Show the original Codex review summary (issue counts, score)
-2. Show the verification summary table (confirmed vs false positive counts)
-3. **Highlight False Positives** prominently — these save developer time
-4. If confidence rate is below 70%, note that the review may need human judgment
-5. Recommend actions only for **confirmed Critical/High** findings
+1. Codex review summary (from codex-review.sh stdout — severity table + score)
+2. Verification summary (from verify-review return — verdict table + confidence)
+3. Confirmed Critical/High action items
+4. If user wants details: `Read the full report at {file_path}`
 
 **Example presentation**:
 ```
 ## Code Review Results
 
 ### GPT-5.2-Codex Review
-[Original review summary — issues found, overall score]
+Session: security-reviewing-turing
+Critical: 2 | High: 1 | Medium: 3 | Low: 1
 
 ### Cross-Model Verification (Claude)
-Verified: 8 findings | Confirmed: 6 | False Positive: 1 | Needs Context: 1
-Confidence Rate: 75%
+Confirmed: 5 | False Positive: 1 | Needs Context: 1
+Confidence Rate: 71%
 
 ### Confirmed Action Items
-1. [CRITICAL] SQL injection in auth.ts:45 — CONFIRMED
-2. [HIGH] Missing CSRF token in form.tsx:12 — CONFIRMED
+1. [CRITICAL] SQL injection in auth.ts:45
+2. [HIGH] Missing CSRF token in form.tsx:12
 
-### False Positives (filtered out)
-- [HIGH] "Hardcoded secret in config.ts:3" — actually reads from env var
+Full reports:
+- Review: .codex-review-cache/reviews/security-reviewing-turing.md
+- Verification: .codex-review-cache/verifications/security-reviewing-turing.md
 ```
 
 ## Reference Materials

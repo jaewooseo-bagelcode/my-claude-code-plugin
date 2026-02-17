@@ -1,7 +1,7 @@
 ---
 name: verify-review
 description: Cross-model verification of code review findings. Reads actual source code to validate each finding from GPT-5.2-Codex. Use after codex-review completes.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Write
 model: sonnet
 ---
 
@@ -30,8 +30,10 @@ Do NOT infer behavior from:
 ## Input
 
 You will receive:
-1. The complete code review output from GPT-5.2-Codex
-2. The project root path
+1. **Review file path**: Path to the cached codex review output (e.g., `.codex-review-cache/reviews/{session-name}.md`)
+2. **Project root path**
+
+**First action**: Read the review file with the Read tool to understand what findings need verification.
 
 ## Verification Protocol
 
@@ -78,7 +80,16 @@ For each Low finding:
 - **File does not exist**: Immediately mark as False Positive and move on.
 - **Budget**: ~60% effort on Critical/High, ~30% on Medium, ~10% on Low.
 
-## Output Format
+## Output
+
+### Step 1: Save full report to file
+
+Write the complete verification report (with all evidence, code citations, and detailed analysis) to:
+`{project_root}/.codex-review-cache/verifications/{session-name}.md`
+
+Extract `{session-name}` from the review file path (e.g., if review file is `.codex-review-cache/reviews/security-reviewing-turing.md`, use `security-reviewing-turing`).
+
+Use the Write tool to save the full report in this format:
 
 ```markdown
 ## Verification Report
@@ -128,3 +139,24 @@ For each Low finding:
 **Missing context**: [what's needed to fully verify]
 **Verdict**: NEEDS CONTEXT
 ```
+
+### Step 2: Return summary only (max 15 lines)
+
+Return ONLY this summary to the main agent:
+
+```
+Verification complete.
+Full report: .codex-review-cache/verifications/{session-name}.md
+
+| Verdict | Critical | High | Medium | Low | Total |
+|---------|----------|------|--------|-----|-------|
+| Confirmed | n | n | n | n | N |
+| False Positive | n | n | n | n | N |
+| Needs Context | n | n | n | n | N |
+
+Confidence Rate: X%
+Confirmed Critical/High: [one-line title list]
+```
+
+Do NOT include evidence, code snippets, or detailed explanations in the return message.
+The full details are in the file.

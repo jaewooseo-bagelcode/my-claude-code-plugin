@@ -175,7 +175,7 @@ EOF
 MODEL="${OPENAI_MODEL:-gpt-5.2-codex}"
 SESSION_ID_FILE="$SESSIONS_DIR/$SESSION_NAME.id"
 
-# Capture output to extract session ID while still streaming to user
+# Capture output to file (not streamed to stdout)
 CODEX_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/codex-output-XXXXXX.txt")
 trap 'rm -f "$TEMP_PROMPT" "$TEMP_MEMORY" "$CODEX_OUTPUT"' EXIT
 
@@ -185,15 +185,16 @@ if [[ -f "$SESSION_ID_FILE" ]]; then
   codex exec resume "$SESSION_ID" \
     --model "$MODEL" \
     - < "$TEMP_PROMPT" \
-    2>&1 | tee "$CODEX_OUTPUT"
+    > "$CODEX_OUTPUT" 2>&1
 else
   echo "Starting new session: $SESSION_NAME" >&2
+  echo "Running codex review..." >&2
   codex exec \
     --model "$MODEL" \
     -C "$REPO_ROOT" \
     --sandbox read-only \
     - < "$TEMP_PROMPT" \
-    2>&1 | tee "$CODEX_OUTPUT"
+    > "$CODEX_OUTPUT" 2>&1
 fi
 
 # Extract and save session ID for future resume
@@ -202,3 +203,34 @@ if [[ -n "$CAPTURED_ID" ]]; then
   echo "$CAPTURED_ID" > "$SESSION_ID_FILE"
   echo "Session saved: $SESSION_NAME → $CAPTURED_ID" >&2
 fi
+
+# --- Save full output to cache ---
+CACHE_DIR="$REPO_ROOT/.codex-review-cache/reviews"
+mkdir -p "$CACHE_DIR"
+REVIEW_FILE="$CACHE_DIR/$SESSION_NAME.md"
+cp "$CODEX_OUTPUT" "$REVIEW_FILE"
+
+# --- Extract and print summary only ---
+CRITICAL=$(grep -c '\[CRITICAL\]\|Critical:' "$CODEX_OUTPUT" 2>/dev/null || echo "0")
+HIGH=$(grep -c '\[HIGH\]\|High:' "$CODEX_OUTPUT" 2>/dev/null || echo "0")
+MEDIUM=$(grep -c '\[MEDIUM\]\|Medium:' "$CODEX_OUTPUT" 2>/dev/null || echo "0")
+LOW=$(grep -c '\[LOW\]\|Low:' "$CODEX_OUTPUT" 2>/dev/null || echo "0")
+SCORE=$(grep -oE 'score: [0-9]+/10|Overall score: [0-9]+' "$CODEX_OUTPUT" | head -1 || echo "")
+
+cat <<SUMMARY
+
+## Review Complete
+
+**Session**: $SESSION_NAME
+**Full report**: $REVIEW_FILE
+
+| Severity | Count |
+|----------|-------|
+| Critical | $CRITICAL |
+| High     | $HIGH |
+| Medium   | $MEDIUM |
+| Low      | $LOW |
+
+${SCORE:+**Score**: $SCORE}
+
+SUMMARY
