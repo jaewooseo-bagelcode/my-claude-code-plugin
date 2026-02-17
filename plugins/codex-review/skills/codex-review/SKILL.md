@@ -451,32 +451,34 @@ The agent reads the review from the file independently, verifies each finding ag
 
 ### Presenting Results
 
+**IMPORTANT: Do NOT Read the cache files.** The summaries from codex-review.sh and verify-review contain all information needed to present results. Reading the full report files wastes main context (~2-3K tokens each). Only Read them when the user explicitly asks for details (e.g., "show me the full report", "more details on finding X").
+
 Present the unified summary from both steps:
 
 1. Codex review summary (from codex-review.sh stdout — severity table + score)
 2. Verification summary (from verify-review return — verdict table + confidence)
-3. Confirmed Critical/High action items
-4. If user wants details: `Read the full report at {file_path}`
+3. Confirmed Critical/High action items (title only, from verification summary)
+4. File paths for on-demand access
 
 **Example presentation**:
 ```
 ## Code Review Results
 
 ### GPT-5.2-Codex Review
-Session: security-reviewing-turing
+Session: security-reviewing-turing | Score: 6/10
 Critical: 2 | High: 1 | Medium: 3 | Low: 1
 
 ### Cross-Model Verification (Claude)
 Confirmed: 5 | False Positive: 1 | Needs Context: 1
 Confidence Rate: 71%
 
-### Confirmed Action Items
-1. [CRITICAL] SQL injection in auth.ts:45
-2. [HIGH] Missing CSRF token in form.tsx:12
+### Confirmed Critical/High
+- Path Traversal Write (decode_masks.py:54)
+- Malformed JSON Handling (actions.ts:291)
 
-Full reports:
-- Review: .codex-review-cache/reviews/security-reviewing-turing.md
-- Verification: .codex-review-cache/verifications/security-reviewing-turing.md
+Want details? I can read the full reports:
+- .codex-review-cache/reviews/security-reviewing-turing.md
+- .codex-review-cache/verifications/security-reviewing-turing.md
 ```
 
 ## Reference Materials

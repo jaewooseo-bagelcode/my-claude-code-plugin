@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.2.1] — 2026-02-18
+
+- **SKILL.md**: Explicit "Do NOT Read cache files" instruction in Presenting Results to prevent main agent from proactively reading full reports into context
+
 ## [3.2.0] — 2026-02-17
 
 Context optimization via file-based handoff. ~90% context reduction.
