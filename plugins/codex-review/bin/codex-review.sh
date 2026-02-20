@@ -172,7 +172,7 @@ $REVIEW_CONTEXT
 EOF
 
 # --- Execute codex ---
-MODEL="${OPENAI_MODEL:-gpt-5.2-codex}"
+MODEL="${OPENAI_MODEL:-gpt-5.3-codex}"
 SESSION_ID_FILE="$SESSIONS_DIR/$SESSION_NAME.id"
 
 # Capture output to file (not streamed to stdout)

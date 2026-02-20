@@ -1,13 +1,13 @@
 # codex-review
 
-Professional code review using GPT-5.2-Codex with cross-model verification by Claude.
+Professional code review using GPT-5.3-Codex with cross-model verification by Claude.
 
 **READ-ONLY** — identifies issues and provides suggestions but never modifies code.
 
 ## How It Works
 
 ```
-codex-review.sh ──► GPT-5.2-Codex (read-only sandbox)
+codex-review.sh ──► GPT-5.3-Codex (read-only sandbox)
                          │
                     full review saved to cache
                          │
@@ -106,7 +106,7 @@ Sessions are stored at `{repo}/.codex-sessions/`.
 
 ## Cross-Model Verification
 
-GPT-5.2-Codex identifies issues, then Claude independently verifies each finding by reading the actual source code. This adversarial approach catches:
+GPT-5.3-Codex identifies issues, then Claude independently verifies each finding by reading the actual source code. This adversarial approach catches:
 
 - Hallucinated file paths or line numbers
 - Misread code logic
@@ -119,7 +119,7 @@ Each finding gets a verdict: **Confirmed**, **False Positive**, or **Needs Conte
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_MODEL` | `gpt-5.2-codex` | Model for Codex CLI |
+| `OPENAI_MODEL` | `gpt-5.3-codex` | Model for Codex CLI |
 
 ## License
 

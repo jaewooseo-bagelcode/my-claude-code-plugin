@@ -77,7 +77,7 @@ file := os.Open(absTarget)
 
 1. **Untrusted repository content**: Malicious files, symlinks, large files
 2. **Trusted environment**: Developer's local machine or CI runner
-3. **Trusted Codex**: GPT-5.2-Codex itself is not adversarial
+3. **Trusted Codex**: GPT-5.3-Codex itself is not adversarial
 
 ### Attack Vectors Mitigated
 
@@ -190,6 +190,6 @@ denyPathRE: \.git, \.docker/config\.json
 ## Audit Trail
 
 - **Reviewed**: 2026-02-01
-- **Auditor**: Claude Sonnet 4.5 + GPT-5.2-Codex
+- **Auditor**: Claude Sonnet 4.5 + GPT-5.3-Codex
 - **Methodology**: Comparative analysis with Python version, threat modeling, code review
 - **Reference**: codex-task-executor security analysis (achieved 9.1/10 with same approach)

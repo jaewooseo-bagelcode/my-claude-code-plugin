@@ -1,6 +1,6 @@
 ---
 name: codex-review
-description: Professional code review and analysis using GPT-5.2-Codex (READ-ONLY, never modifies code). Analyzes bugs, security vulnerabilities, performance issues, and code quality. Provides detailed reports with actionable suggestions but does NOT implement fixes. Use when the user wants to understand code issues, find bugs, or get improvement suggestions. Triggers on phrases like "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", "identify issues". NOT for implementing fixes - use codex-task-executor for that.
+description: Professional code review and analysis using GPT-5.3-Codex (READ-ONLY, never modifies code). Analyzes bugs, security vulnerabilities, performance issues, and code quality. Provides detailed reports with actionable suggestions but does NOT implement fixes. Use when the user wants to understand code issues, find bugs, or get improvement suggestions. Triggers on phrases like "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", "identify issues". NOT for implementing fixes - use codex-task-executor for that.
 ---
 
 # Instructions
@@ -241,7 +241,7 @@ You (Claude Code):
 - `codex login` completed (ChatGPT Pro subscription recommended)
 
 **Optional**:
-- `OPENAI_MODEL` — override model (default: `gpt-5.2-codex`)
+- `OPENAI_MODEL` — override model (default: `gpt-5.3-codex`)
 
 **Sessions**: `{project}/.codex-sessions/` (project-isolated)
 **Cache**: `{project}/.codex-review-cache/` (reviews + verifications)
@@ -464,7 +464,7 @@ Present the unified summary from both steps:
 ```
 ## Code Review Results
 
-### GPT-5.2-Codex Review
+### GPT-5.3-Codex Review
 Session: security-reviewing-turing | Score: 6/10
 Critical: 2 | High: 1 | Medium: 3 | Low: 1
 
