@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 
 const MAX_STEPS: usize = 100;
 
-/// Gemini 3 Pro participant with tool loop (streamGenerateContent API, SSE streaming)
+/// Gemini 3.1 Pro participant with tool loop (streamGenerateContent API, SSE streaming)
 pub async fn call_gemini_participant(
     system_prompt: &str,
     user_prompt: &str,
@@ -21,7 +21,7 @@ pub async fn call_gemini_participant(
         "role": "user",
         "parts": [{ "text": user_prompt }]
     })];
-    let mut session = ParticipantSession::new("gemini", "gemini-3-pro-preview");
+    let mut session = ParticipantSession::new("gemini", "gemini-3.1-pro-preview");
 
     let function_declarations: Vec<Value> = tools.iter().map(|tool| {
         json!({
@@ -33,7 +33,7 @@ pub async fn call_gemini_participant(
 
     let tools_payload = json!([{ "functionDeclarations": function_declarations }]);
 
-    let url = config.gemini_url("/v1beta/models/gemini-3-pro-preview:streamGenerateContent?alt=sse");
+    let url = config.gemini_url("/v1beta/models/gemini-3.1-pro-preview:streamGenerateContent?alt=sse");
     let (auth_header, auth_value) = config.gemini_auth();
 
     for step_num in 0..MAX_STEPS {

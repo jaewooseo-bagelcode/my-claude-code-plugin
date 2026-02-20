@@ -4,6 +4,14 @@
 
 - Upgrade default model from `gpt-5.2-codex` to `gpt-5.3-codex`
 
+## [3.3.1] — 2026-02-20
+
+- **verify-review agent**: Explicit `claude-sonnet-4-6` model ID (was `sonnet`)
+
+## [3.3.0] — 2026-02-20
+
+- Upgrade default model from `gpt-5.2-codex` to `gpt-5.3-codex`
+
 ## [3.2.1] — 2026-02-18
 
 - **SKILL.md**: Explicit "Do NOT Read cache files" instruction in Presenting Results to prevent main agent from proactively reading full reports into context

@@ -8,8 +8,8 @@ use serde_json::{json, Value};
 
 const MAX_STEPS: usize = 100;
 
-/// GPT-5.2 participant with tool loop (Responses API, SSE streaming)
-pub async fn call_gpt52_participant(
+/// GPT-5.3 participant with tool loop (Responses API, SSE streaming)
+pub async fn call_gpt53_participant(
     system_prompt: &str,
     user_prompt: &str,
     tools: &[ToolDefinition],
@@ -17,7 +17,7 @@ pub async fn call_gpt52_participant(
     config: &AIProxyConfig,
 ) -> Result<ParticipantSession, Box<dyn std::error::Error + Send + Sync>> {
     let client = config::build_http_client();
-    let mut session = ParticipantSession::new("openai", "gpt-5.2");
+    let mut session = ParticipantSession::new("openai", "gpt-5.3");
 
     let request_tools: Vec<Value> = tools.iter().map(|tool| {
         json!({
@@ -38,7 +38,7 @@ pub async fn call_gpt52_participant(
 
     for step_num in 0..MAX_STEPS {
         let payload = json!({
-            "model": "gpt-5.2",
+            "model": "gpt-5.3",
             "tools": request_tools,
             "tool_choice": if request_tools.is_empty() { "none" } else { "auto" },
             "input": input_items,
@@ -57,7 +57,7 @@ pub async fn call_gpt52_participant(
                     session.finalize(all_output_content, true, Some(format!("Partial: {}", e)));
                     return Ok(session);
                 }
-                session.finalize(String::new(), false, Some(format!("GPT-5.2 error: {}", e)));
+                session.finalize(String::new(), false, Some(format!("GPT-5.3 error: {}", e)));
                 return Ok(session);
             }
         };
@@ -99,15 +99,15 @@ pub async fn call_gpt52_participant(
     }
 
     if all_output_content.is_empty() {
-        session.finalize(String::new(), false, Some("Empty response from GPT-5.2".to_string()));
+        session.finalize(String::new(), false, Some("Empty response from GPT-5.3".to_string()));
     } else {
         session.finalize(all_output_content, true, None);
     }
     Ok(session)
 }
 
-/// GPT-5.2 chair (Chat Completions API, SSE streaming, no tools)
-pub async fn call_gpt52_chair(
+/// GPT-5.3 chair (Chat Completions API, SSE streaming, no tools)
+pub async fn call_gpt53_chair(
     system_prompt: &str,
     prompt: &str,
     config: &AIProxyConfig,
@@ -115,7 +115,7 @@ pub async fn call_gpt52_chair(
     let client = config::build_http_client();
 
     let payload = json!({
-        "model": "gpt-5.2",
+        "model": "gpt-5.3",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
@@ -135,7 +135,7 @@ pub async fn call_gpt52_chair(
     Ok(aiproxy_common::session::AiResponse {
         provider: "openai".to_string(),
         content: result.text,
-        model: "gpt-5.2".to_string(),
+        model: "gpt-5.3".to_string(),
         success: true,
         error: None,
     })

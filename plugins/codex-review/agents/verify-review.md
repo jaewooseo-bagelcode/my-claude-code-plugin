@@ -2,7 +2,7 @@
 name: verify-review
 description: Cross-model verification of code review findings. Reads actual source code to validate each finding from GPT-5.3-Codex. Use after codex-review completes.
 tools: Read, Grep, Glob, Write
-model: sonnet
+model: claude-sonnet-4-6
 ---
 
 # Cross-Model Critic-Verifier
