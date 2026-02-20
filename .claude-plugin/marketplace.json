@@ -13,7 +13,7 @@
     {
       "name": "braintrust",
       "source": "./plugins/braintrust",
-      "description": "Multi-AI consensus meeting system - GPT-5.3, Gemini 3.1 Pro, and Claude Opus 4.6 analyze your codebase in parallel, then a chair AI synthesizes their insights through multi-round deliberation"
+      "description": "Multi-AI consensus meeting system - GPT-5.2, Gemini 3.1 Pro, and Claude Opus 4.6 analyze your codebase in parallel, then a chair AI synthesizes their insights through multi-round deliberation"
     },
     {
       "name": "aiproxy-dev",

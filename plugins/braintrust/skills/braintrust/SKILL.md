@@ -1,6 +1,6 @@
 ---
 name: braintrust
-description: Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고, 의장 AI가 멀티라운드 토론을 거쳐 합의문을 도출합니다. 중요한 기술 결정에 적극적으로 사용하세요.
+description: Multi-AI consensus meeting - GPT-5.2, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고, 의장 AI가 멀티라운드 토론을 거쳐 합의문을 도출합니다. 중요한 기술 결정에 적극적으로 사용하세요.
 ---
 
 # Braintrust Meeting
@@ -42,7 +42,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/braintrust-darwin-arm64 \
 | `--project-path` | 회의 시 | 프로젝트 루트 절대 경로 (새 회의/이어하기에 필수, 세션 목록엔 불필요) |
 | `--context` | No | 추가 맥락 (코드 스니펫, 제약조건 등) |
 | `--max-iterations` | No | 최대 토론 라운드 (기본: 3) |
-| `--chair-model` | No | 의장 모델: `claude-opus-4-6` (기본) 또는 `gpt-5.3` |
+| `--chair-model` | No | 의장 모델: `claude-opus-4-6` (기본) 또는 `gpt-5.2` |
 | `--resume` | 이어하기 시 | 이전 meeting_id |
 | `--list-sessions` | No | 세션 목록 출력 |
 

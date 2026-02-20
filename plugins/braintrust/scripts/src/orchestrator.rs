@@ -73,7 +73,7 @@ pub async fn run_braintrust(
         };
 
         // Run 3 participants in parallel
-        events::emit_participant_started("GPT-5.3", "gpt-5.3");
+        events::emit_participant_started("GPT-5.2", "gpt-5.2");
         events::emit_participant_started("Gemini", "gemini-3.1-pro-preview");
         events::emit_participant_started("Claude", "claude-opus-4-6");
 
@@ -91,7 +91,7 @@ pub async fn run_braintrust(
         let gemini_session = gemini_result?;
         let claude_session = claude_result?;
 
-        events::emit_participant_completed("GPT-5.3", gpt_session.success, gpt_start.elapsed().as_millis() as u64);
+        events::emit_participant_completed("GPT-5.2", gpt_session.success, gpt_start.elapsed().as_millis() as u64);
         events::emit_participant_completed("Gemini", gemini_session.success, gemini_start.elapsed().as_millis() as u64);
         events::emit_participant_completed("Claude", claude_session.success, claude_start.elapsed().as_millis() as u64);
 
@@ -318,7 +318,7 @@ pub async fn resume_braintrust(
 
         let participant_prompt = build_followup_participant_prompt(&current_question, &meta.agenda, meta.context.as_deref());
 
-        events::emit_participant_started("GPT-5.3", "gpt-5.3");
+        events::emit_participant_started("GPT-5.2", "gpt-5.2");
         events::emit_participant_started("Gemini", "gemini-3.1-pro-preview");
         events::emit_participant_started("Claude", "claude-opus-4-6");
 
@@ -336,7 +336,7 @@ pub async fn resume_braintrust(
         let gemini_session = gemini_result?;
         let claude_session = claude_result?;
 
-        events::emit_participant_completed("GPT-5.3", gpt_session.success, gpt_start.elapsed().as_millis() as u64);
+        events::emit_participant_completed("GPT-5.2", gpt_session.success, gpt_start.elapsed().as_millis() as u64);
         events::emit_participant_completed("Gemini", gemini_session.success, gemini_start.elapsed().as_millis() as u64);
         events::emit_participant_completed("Claude", claude_session.success, claude_start.elapsed().as_millis() as u64);
 
@@ -488,7 +488,7 @@ async fn run_participant_with_retry(
         let call_start = Instant::now();
 
         let result = match provider {
-            "openai" => providers::openai::call_gpt53_participant(system_prompt, user_prompt, tools, project_path, config).await,
+            "openai" => providers::openai::call_gpt52_participant(system_prompt, user_prompt, tools, project_path, config).await,
             "gemini" => providers::gemini::call_gemini_participant(system_prompt, user_prompt, tools, project_path, config).await,
             "claude" => providers::claude::call_claude_participant(system_prompt, user_prompt, tools, project_path, config).await,
             _ => return Err(format!("Unknown provider: {}", provider).into()),
@@ -540,11 +540,11 @@ async fn run_chair(
     config: &AIProxyConfig,
     chair_model: &str,
 ) -> Result<AiResponse, Box<dyn std::error::Error + Send + Sync>> {
-    // Use GPT-5.3 as default chair (or Claude if specified)
+    // Use GPT-5.2 as default chair (or Claude if specified)
     if chair_model.starts_with("claude") {
         run_claude_chair(system_prompt, prompt, config).await
     } else {
-        providers::openai::call_gpt53_chair(system_prompt, prompt, config).await
+        providers::openai::call_gpt52_chair(system_prompt, prompt, config).await
     }
 }
 
@@ -792,7 +792,7 @@ Based on ALL rounds of discussion, produce a structured meeting report in Korean
 
 ### AI별 핵심 주장 (Claims)
 
-#### GPT-5.3
+#### GPT-5.2
 | Claim | Evidence | Confidence |
 |-------|----------|------------|
 | [주장] | [근거] (등급) | H/M/L |
@@ -808,7 +808,7 @@ Based on ALL rounds of discussion, produce a structured meeting report in Korean
 | [주장] | [근거] (등급) | H/M/L |
 
 ### 의견 비교
-| 항목 | GPT-5.3 | Gemini 3.1 Pro | Claude Opus 4.6 |
+| 항목 | GPT-5.2 | Gemini 3.1 Pro | Claude Opus 4.6 |
 |------|---------|--------------|-----------------|
 | 핵심 관점 | ... | ... | ... |
 | 강조점 | ... | ... | ... |
