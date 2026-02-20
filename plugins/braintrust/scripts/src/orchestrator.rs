@@ -540,7 +540,7 @@ async fn run_chair(
     config: &AIProxyConfig,
     chair_model: &str,
 ) -> Result<AiResponse, Box<dyn std::error::Error + Send + Sync>> {
-    // Use GPT-5.2 as default chair (or Claude if specified)
+    // Use GPT-5.3 as default chair (or Claude if specified)
     if chair_model.starts_with("claude") {
         run_claude_chair(system_prompt, prompt, config).await
     } else {
@@ -792,12 +792,12 @@ Based on ALL rounds of discussion, produce a structured meeting report in Korean
 
 ### AI별 핵심 주장 (Claims)
 
-#### GPT-5.2
+#### GPT-5.3
 | Claim | Evidence | Confidence |
 |-------|----------|------------|
 | [주장] | [근거] (등급) | H/M/L |
 
-#### Gemini 3 Pro
+#### Gemini 3.1 Pro
 | Claim | Evidence | Confidence |
 |-------|----------|------------|
 | [주장] | [근거] (등급) | H/M/L |
@@ -808,7 +808,7 @@ Based on ALL rounds of discussion, produce a structured meeting report in Korean
 | [주장] | [근거] (등급) | H/M/L |
 
 ### 의견 비교
-| 항목 | GPT-5.2 | Gemini 3 Pro | Claude Opus 4.6 |
+| 항목 | GPT-5.3 | Gemini 3.1 Pro | Claude Opus 4.6 |
 |------|---------|--------------|-----------------|
 | 핵심 관점 | ... | ... | ... |
 | 강조점 | ... | ... | ... |

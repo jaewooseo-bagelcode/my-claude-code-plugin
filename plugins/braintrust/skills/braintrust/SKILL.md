@@ -1,6 +1,6 @@
 ---
 name: braintrust
-description: Multi-AI consensus meeting - GPT-5.2, Gemini 3 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고, 의장 AI가 멀티라운드 토론을 거쳐 합의문을 도출합니다. 중요한 기술 결정에 적극적으로 사용하세요.
+description: Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고, 의장 AI가 멀티라운드 토론을 거쳐 합의문을 도출합니다. 중요한 기술 결정에 적극적으로 사용하세요.
 ---
 
 # Braintrust Meeting

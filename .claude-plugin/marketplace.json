@@ -8,12 +8,12 @@
     {
       "name": "codex-review",
       "source": "./plugins/codex-review",
-      "description": "Professional code review and analysis using GPT-5.2-Codex (READ-ONLY). Analyzes bugs, security vulnerabilities, performance issues, and code quality."
+      "description": "Professional code review and analysis using GPT-5.3-Codex (READ-ONLY). Analyzes bugs, security vulnerabilities, performance issues, and code quality."
     },
     {
       "name": "braintrust",
       "source": "./plugins/braintrust",
-      "description": "Multi-AI consensus meeting system - GPT-5.2, Gemini 3 Pro, and Claude Opus 4.6 analyze your codebase in parallel, then a chair AI synthesizes their insights through multi-round deliberation"
+      "description": "Multi-AI consensus meeting system - GPT-5.3, Gemini 3.1 Pro, and Claude Opus 4.6 analyze your codebase in parallel, then a chair AI synthesizes their insights through multi-round deliberation"
     },
     {
       "name": "aiproxy-dev",
