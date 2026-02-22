@@ -50,7 +50,10 @@ ${CLAUDE_PLUGIN_ROOT}/bin/update-dashboard.sh "{session_dir}" 2>/dev/null &
 
 Note: Codex/Gemini shell scripts emit their own `participant_start`/`participant_done`/`participant_error` events automatically.
 
-After Step 1 completes, inform the user:
+After Step 1 completes, open the dashboard in the browser and inform the user:
+```bash
+open "{session_dir}/dashboard.html"
+```
 ```
 Dashboard: .braintrust-sessions/{meeting_id}/dashboard.html
 ```
