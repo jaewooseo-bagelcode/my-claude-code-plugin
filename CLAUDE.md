@@ -150,6 +150,17 @@ plugins/
 
 **규칙**: aiproxy-common 코드를 변경할 때 반드시 `cargo test -p aiproxy-common`을 돌리고, 실패하면 머지하지 않는다.
 
+## Plugin Release Workflow
+
+**버전 올리기는 반드시 유저 검수 후에 한다.** 절대로 테스트 전에 버전을 올리지 않는다.
+
+1. 코드 변경
+2. 로컬에서 충분히 테스트 (`bash -n`, E2E 등)
+3. 유저에게 테스트 결과 보고 및 검수 요청
+4. 유저 승인 후 `plugin.json` 버전 업 + 커밋
+
+`plugin.json`의 version을 올려야 `/plugin` 싱크 시 반영된다. 유저 승인 없이 version을 올리지 마라.
+
 ## Conventions
 
 - Plugin names: kebab-case (e.g., `my-tool`, `code-formatter`)
