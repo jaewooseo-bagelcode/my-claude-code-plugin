@@ -61,7 +61,7 @@ fi
 ROUND_DIR="$SESSION_DIR/round_${ROUND_NUM}"
 mkdir -p "$ROUND_DIR"
 OUTPUT_FILE="$ROUND_DIR/gemini-output.md"
-MODEL="${GEMINI_MODEL:-gemini-3.1-pro}"
+MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
 EVENTS_FILE="$SESSION_DIR/events.jsonl"
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
