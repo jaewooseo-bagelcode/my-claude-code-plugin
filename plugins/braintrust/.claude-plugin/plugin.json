@@ -1,7 +1,7 @@
 {
   "name": "braintrust",
-  "description": "Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고 합의문을 도출합니다. Codex CLI + Gemini CLI + Claude Code agent architecture.",
-  "version": "2.2.0",
+  "description": "Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6 analyze codebase in parallel and produce consensus reports. Codex CLI + Gemini CLI + Claude Code agent architecture.",
+  "version": "2.2.1",
   "author": {
     "name": "jaewooseo"
   }

@@ -1,49 +1,55 @@
 ---
 name: braintrust
-description: Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고, 의장 AI(Sonnet 4.6 1M)가 멀티라운드 토론을 거쳐 합의문을 도출합니다. 중요한 기술 결정에 적극적으로 사용하세요.
+description: Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6 analyze the codebase in parallel, then chair AI (Sonnet 4.6 1M) drives multi-round discussion to produce a consensus report. Use actively for important technical decisions.
 ---
 
 # Braintrust Meeting
 
-3개 AI(GPT-5.3 Codex, Gemini 3.1 Pro, Claude Opus 4.6)가 코드베이스를 병렬 분석하고, 의장(Sonnet 4.6 1M)이 멀티라운드 토론을 거쳐 합의문을 도출하는 회의 시스템입니다.
+3 AIs (GPT-5.3 Codex, Gemini 3.1 Pro, Claude Opus 4.6) analyze the codebase in parallel, then the chair (Sonnet 4.6 1M) drives multi-round discussion to produce a consensus report.
 
-## 실행
+## Plan Mode
 
-`braintrust` 에이전트를 호출하여 회의를 실행합니다.
+Braintrust cannot run in plan mode (read-only). Plan mode propagates read-only restrictions to subagents, blocking shell script execution.
 
-**$ARGUMENTS 파싱 규칙:**
+**If plan mode is active, do NOT invoke the agent. Instead, tell the user to exit plan mode (Shift+Tab) and invoke /braintrust again.**
 
-1. `--context "..."` 또는 `--context ...` → 해당 값을 `context`로 추출, $ARGUMENTS에서 제거
-2. `--max-rounds N` → 해당 숫자를 `max_rounds`로 추출, $ARGUMENTS에서 제거 (기본: 3)
-3. 나머지 텍스트 → `agenda`
+## Execution
 
-예시: `$ARGUMENTS` = `코드 리뷰 전략 --context "보안 중심" --max-rounds 2`
-→ agenda: `코드 리뷰 전략`, context: `보안 중심`, max_rounds: `2`
+Invoke the `braintrust` agent to run a meeting.
 
-**에이전트에 전달할 입력:**
+**$ARGUMENTS parsing rules:**
+
+1. `--context "..."` or `--context ...` → extract as `context`, remove from $ARGUMENTS
+2. `--max-rounds N` → extract as `max_rounds`, remove from $ARGUMENTS (default: 3)
+3. Remaining text → `agenda`
+
+Example: `$ARGUMENTS` = `code review strategy --context "security focus" --max-rounds 2`
+→ agenda: `code review strategy`, context: `security focus`, max_rounds: `2`
+
+**Input to pass to the agent:**
 
 ```
-agenda: [파싱된 agenda]
+agenda: [parsed agenda]
 project_path: !`git rev-parse --show-toplevel`
-context: [파싱된 context, 없으면 생략]
-max_rounds: [파싱된 max_rounds, 없으면 3]
+context: [parsed context, omit if none]
+max_rounds: [parsed max_rounds, or 3]
 ```
 
-## 실시간 대시보드
+## Live Dashboard
 
-회의 진행 상황을 실시간으로 확인할 수 있는 HTML 대시보드가 자동 생성됩니다.
-- 경로: `.braintrust-sessions/{meeting_id}/dashboard.html`
-- VS Code: Simple Browser 또는 Live Preview 확장으로 열면 파일 변경 시 자동 리로드
-- 브라우저: 파일을 직접 열면 3초마다 자동 새로고침 (완료 시 중단)
-- 3개 AI 참여자의 상태, 분석 내용, 의장 판정, 이벤트 타임라인을 실시간 표시
+A real-time HTML dashboard is auto-generated to track meeting progress.
+- Path: `.braintrust-sessions/{meeting_id}/dashboard.html`
+- VS Code: Open with Simple Browser or Live Preview extension for auto-reload on file change
+- Browser: Open the file directly for 3-second auto-refresh (stops on completion)
+- Displays status of 3 AI participants, analysis content, chair decisions, and event timeline
 
-## 결과 표시
+## Displaying Results
 
-에이전트가 반환한 요약을 사용자에게 표시합니다.
-상세 내용은 `.braintrust-sessions/{meeting_id}/synthesis.md` 파일을 Read하여 확인할 수 있습니다.
+Show the summary returned by the agent to the user.
+For full details, Read `.braintrust-sessions/{meeting_id}/synthesis.md`.
 
-## 필수 조건
+## Prerequisites
 
 - `codex` CLI: `npm install -g @openai/codex` → `codex login`
 - `gemini` CLI: https://github.com/google-gemini/gemini-cli → `gemini auth login`
-- `claude` CLI (Claude Code — Claude Opus 참여자용)
+- `claude` CLI (Claude Code — for Claude Opus participant)
