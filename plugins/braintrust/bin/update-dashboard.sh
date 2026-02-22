@@ -146,6 +146,8 @@ state = {
     "status": status
 }
 state_json = json.dumps(state, ensure_ascii=False, indent=None)
+# Escape </script> to prevent breaking out of <script> context
+state_json = state_json.replace("</", "<\\/")
 
 # --- Read template and substitute ---
 with open(template_path) as f:
@@ -161,9 +163,9 @@ tmpl = re2.sub(
     flags=re2.DOTALL
 )
 
-# --- Atomic write ---
+# --- Atomic write (PID in tmp name to avoid race condition) ---
 out_path = os.path.join(session_dir, "dashboard.html")
-tmp_path = out_path + ".tmp"
+tmp_path = out_path + ".tmp.%d" % os.getpid()
 with open(tmp_path, "w") as f:
     f.write(tmpl)
 os.replace(tmp_path, out_path)

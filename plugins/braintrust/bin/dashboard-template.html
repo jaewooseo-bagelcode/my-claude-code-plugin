@@ -156,9 +156,9 @@ function renderMd(text) {
     // Table block
     const tableMatch = block.match(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)$/);
     if (tableMatch) {
-      const ths = tableMatch[1].split('|').filter(c=>c.trim()).map(c=>`<th>${c.trim()}</th>`).join('');
+      const ths = tableMatch[1].split('|').filter(c=>c.trim()).map(c=>`<th>${inline(c.trim())}</th>`).join('');
       const rows = tableMatch[3].trim().split('\n').map(r => {
-        const tds = r.split('|').filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join('');
+        const tds = r.split('|').filter(c=>c.trim()).map(c=>`<td>${inline(c.trim())}</td>`).join('');
         return `<tr>${tds}</tr>`;
       }).join('');
       out.push(`<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`);
