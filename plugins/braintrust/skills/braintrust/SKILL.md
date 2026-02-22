@@ -1,11 +1,11 @@
 ---
 name: braintrust
-description: Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고, 의장 AI가 멀티라운드 토론을 거쳐 합의문을 도출합니다. 중요한 기술 결정에 적극적으로 사용하세요.
+description: Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고, 의장 AI(Sonnet 4.6 1M)가 멀티라운드 토론을 거쳐 합의문을 도출합니다. 중요한 기술 결정에 적극적으로 사용하세요.
 ---
 
 # Braintrust Meeting
 
-3개 AI(GPT-5.3 Codex, Gemini 3.1 Pro, Claude Opus 4.6)가 코드베이스를 병렬 분석하고, 의장이 멀티라운드 토론을 통해 합의문을 도출하는 회의 시스템입니다.
+3개 AI(GPT-5.3 Codex, Gemini 3.1 Pro, Claude Opus 4.6)가 코드베이스를 병렬 분석하고, 의장(Sonnet 4.6 1M)이 멀티라운드 토론을 거쳐 합의문을 도출하는 회의 시스템입니다.
 
 ## 실행
 
@@ -46,3 +46,4 @@ max_rounds: [파싱된 max_rounds, 없으면 3]
 
 - `codex` CLI: `npm install -g @openai/codex` → `codex login`
 - `gemini` CLI: https://github.com/google-gemini/gemini-cli → `gemini auth login`
+- `claude` CLI (Claude Code — Claude Opus 참여자용)
