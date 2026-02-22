@@ -70,14 +70,15 @@ printf '{"ts":%d,"event":"participant_start","data":{"round":%s,"participant":"c
   "$(date +%s)000" "$ROUND_NUM" >> "$EVENTS_FILE"
 "$PLUGIN_ROOT/bin/update-dashboard.sh" "$SESSION_DIR" 2>/dev/null &
 
-# --- Execute via claude CLI (print mode, no tools, read-only analysis) ---
+# --- Execute via claude CLI (print mode, bypass nested session check) ---
+unset CLAUDECODE 2>/dev/null || true
 claude -p \
   --model "$MODEL" \
   --output-format text \
   --no-session-persistence \
   --dangerously-skip-permissions \
   --add-dir "$PROJECT_PATH" \
-  "$(cat "$PROMPT_FILE")" \
+  - < "$PROMPT_FILE" \
   > "$OUTPUT_FILE" \
   2>"$ROUND_DIR/claude-stderr.log" || {
     EXIT_CODE=$?
