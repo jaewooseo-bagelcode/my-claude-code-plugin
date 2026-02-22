@@ -24,6 +24,15 @@ You receive from the calling skill:
 **ALL Bash tool calls in this agent MUST use `dangerouslyDisableSandbox: true`.**
 This is required because this agent runs shell scripts and CLI tools (codex, gemini, python3) that need full system access.
 
+## Plugin Root Resolution
+
+`${CLAUDE_PLUGIN_ROOT}` is NOT available as an environment variable in this agent context. In Step 1, **before anything else**, resolve it:
+```bash
+PLUGIN_ROOT=$(ls -d ~/.claude/plugins/cache/*/braintrust/*/ 2>/dev/null | sort -V | tail -1)
+echo "PLUGIN_ROOT=$PLUGIN_ROOT"
+```
+Use this resolved `PLUGIN_ROOT` for ALL subsequent commands instead of `${CLAUDE_PLUGIN_ROOT}`.
+
 ## Dashboard Updates
 
 Throughout the meeting, emit events to `{session_dir}/events.jsonl` and call `update-dashboard.sh` to keep the real-time dashboard in sync.

@@ -203,20 +203,37 @@ function renderMd(text) {
       continue;
     }
 
-    // Multi-line block: process line by line for headers mixed with text
+    // Multi-line block: process line by line for headers mixed with text/tables
     const lines = block.split('\n');
     if (lines.length > 1) {
       let group = [];
+      const flushGroup = () => {
+        if (!group.length) return;
+        const joined = group.join('\n');
+        // Check if group is a table
+        const tm = joined.match(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)$/);
+        if (tm) {
+          const ths = tm[1].split('|').filter(c=>c.trim()).map(c=>`<th>${inline(c.trim())}</th>`).join('');
+          const rows = tm[3].trim().split('\n').map(r => {
+            const tds = r.split('|').filter(c=>c.trim()).map(c=>`<td>${inline(c.trim())}</td>`).join('');
+            return `<tr>${tds}</tr>`;
+          }).join('');
+          out.push(`<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`);
+        } else {
+          out.push(`<p>${group.map(inline).join('<br>')}</p>`);
+        }
+        group = [];
+      };
       for (const line of lines) {
         const lh = line.match(/^(#{1,4}) (.+)$/);
         if (lh) {
-          if (group.length) { out.push(`<p>${group.map(inline).join('<br>')}</p>`); group = []; }
+          flushGroup();
           out.push(`<h${lh[1].length}>${inline(lh[2])}</h${lh[1].length}>`);
         } else {
           group.push(line);
         }
       }
-      if (group.length) out.push(`<p>${group.map(inline).join('<br>')}</p>`);
+      flushGroup();
       continue;
     }
 

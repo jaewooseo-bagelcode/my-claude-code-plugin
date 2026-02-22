@@ -62,46 +62,56 @@ for rd in round_dirs:
         with open(prompt_path) as f:
             r["prompt"] = f.read()
 
-    # Read participant outputs
-    for name, filename in [("codex","codex-output.md"),("gemini","gemini-output.md"),("claude","claude-output.md")]:
-        fpath = os.path.join(rd, filename)
-        if os.path.isfile(fpath):
-            with open(fpath) as f:
-                content = f.read().strip()
-            words = len(content.split())
-            is_error = content.startswith("[Codex failed") or content.startswith("[Gemini failed")
-            r["participants"][name] = {
-                "status": "error" if is_error else "done",
-                "content": content,
-                "words": words
-            }
-
     rounds.append(r)
 
-# --- Enrich status from events ---
+# --- Build participant status from events (authoritative source) ---
 participant_models = {}
+participant_status = {}  # (round, name) -> status
 for ev in events:
     d = ev.get("data", {})
-    if ev["event"] == "participant_start" and d.get("participant") and d.get("model"):
-        participant_models[d["participant"]] = d["model"]
-    if ev["event"] == "participant_start" and d.get("round") is not None:
-        rn = d["round"]
-        pname = d.get("participant","")
-        # Ensure round exists
-        while len(rounds) <= rn:
-            rounds.append({"round": len(rounds), "prompt":"", "participants":{}, "chair":{}})
-        if pname and pname not in rounds[rn]["participants"]:
-            rounds[rn]["participants"][pname] = {"status": "analyzing", "content": "", "words": 0}
-    if ev["event"] == "participant_error" and d.get("round") is not None:
-        rn = d["round"]
-        pname = d.get("participant","")
-        if rn < len(rounds) and pname in rounds[rn]["participants"]:
-            rounds[rn]["participants"][pname]["status"] = "error"
-            rounds[rn]["participants"][pname]["content"] = d.get("error","")
-    if ev["event"] == "chair_decision" and d.get("round") is not None:
+    if ev.get("event") == "participant_start":
+        rn = d.get("round", 0)
+        pname = d.get("participant", "")
+        if d.get("model"):
+            participant_models[pname] = d["model"]
+        if pname:
+            participant_status[(rn, pname)] = "analyzing"
+            # Ensure round exists
+            while len(rounds) <= rn:
+                rounds.append({"round": len(rounds), "prompt":"", "participants":{}, "chair":{}})
+    elif ev.get("event") == "participant_done":
+        rn = d.get("round", 0)
+        pname = d.get("participant", "")
+        if pname:
+            participant_status[(rn, pname)] = "done"
+    elif ev.get("event") == "participant_error":
+        rn = d.get("round", 0)
+        pname = d.get("participant", "")
+        if pname:
+            participant_status[(rn, pname)] = "error"
+    elif ev.get("event") == "chair_decision" and d.get("round") is not None:
         rn = d["round"]
         if rn < len(rounds):
             rounds[rn]["chair"] = {"decision": d.get("decision",""), "question": d.get("question","")}
+
+# --- Read file content and merge with event-based status ---
+for r in rounds:
+    rd = os.path.join(session_dir, "round_%d" % r["round"])
+    for name, filename in [("codex","codex-output.md"),("gemini","gemini-output.md"),("claude","claude-output.md")]:
+        fpath = os.path.join(rd, filename)
+        status = participant_status.get((r["round"], name))
+        content = ""
+        words = 0
+        if os.path.isfile(fpath):
+            with open(fpath) as f:
+                content = f.read().strip()
+            words = len(content.split()) if content else 0
+            is_error = content.startswith("[Codex failed") or content.startswith("[Gemini failed")
+            if is_error:
+                status = "error"
+        # Only add participant if we have event or file data
+        if status:
+            r["participants"][name] = {"status": status, "content": content, "words": words}
 
 # Apply models to participants
 for r in rounds:
