@@ -265,17 +265,32 @@ function fmtTime(ts) {
   return d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
-// --- Auto-refresh via JS (preserves tab state, stops when done) ---
+// --- Auto-refresh via JS (preserves tab/scroll state, stops when done) ---
 if (STATE.status !== 'done') {
-  setTimeout(() => location.reload(), 3000);
+  setTimeout(() => {
+    // Save scroll position in hash alongside round
+    const hash = location.hash.replace(/#/, '').split('&').reduce((o,p) => { const [k,v]=p.split('='); if(k) o[k]=v; return o; }, {});
+    hash.sy = String(window.scrollY);
+    location.hash = Object.entries(hash).map(([k,v])=>k+'='+v).join('&');
+    location.reload();
+  }, 3000);
 }
+
+// --- Restore scroll position from hash ---
+window.addEventListener('load', () => {
+  const hash = location.hash.replace(/#/, '').split('&').reduce((o,p) => { const [k,v]=p.split('='); if(k) o[k]=v; return o; }, {});
+  if (hash.sy) window.scrollTo(0, parseInt(hash.sy));
+});
 
 // --- Render ---
 function render() {
   const app = document.getElementById('app');
   const meta = STATE.meta || {};
   const rounds = STATE.rounds || [];
-  const currentRound = rounds.length > 0 ? rounds.length - 1 : 0;
+  // Restore selected round from hash, default to latest
+  const hashParams = location.hash.replace(/#/, '').split('&').reduce((o,p) => { const [k,v]=p.split('='); if(k) o[k]=v; return o; }, {});
+  const savedRound = hashParams.r !== undefined ? parseInt(hashParams.r) : -1;
+  const currentRound = (savedRound >= 0 && savedRound < rounds.length) ? savedRound : (rounds.length > 0 ? rounds.length - 1 : 0);
 
   let html = '';
 
@@ -397,6 +412,10 @@ function render() {
 function switchRound(n) {
   document.querySelectorAll('.round-tab').forEach((t,i) => t.classList.toggle('active', i===n));
   document.querySelectorAll('.round-content').forEach((c,i) => c.classList.toggle('active', i===n));
+  // Persist selected round in hash
+  const hash = location.hash.replace(/#/, '').split('&').reduce((o,p) => { const [k,v]=p.split('='); if(k) o[k]=v; return o; }, {});
+  hash.r = String(n);
+  location.hash = Object.entries(hash).map(([k,v])=>k+'='+v).join('&');
 }
 
 document.addEventListener('DOMContentLoaded', render);
