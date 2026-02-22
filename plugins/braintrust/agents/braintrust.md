@@ -19,6 +19,11 @@ You receive from the calling skill:
 - `context`: (optional) Additional context
 - `max_rounds`: (optional, default 3) Maximum discussion rounds
 
+## Bash Tool Rules
+
+**ALL Bash tool calls in this agent MUST use `dangerouslyDisableSandbox: true`.**
+This is required because this agent runs shell scripts and CLI tools (codex, gemini, python3) that need full system access.
+
 ## Dashboard Updates
 
 Throughout the meeting, emit events to `{session_dir}/events.jsonl` and call `update-dashboard.sh` to keep the real-time dashboard in sync.
@@ -84,9 +89,7 @@ Dashboard: .braintrust-sessions/{meeting_id}/dashboard.html
 
 ### Step 3: Run 3 Participants in Parallel
 
-Execute all three in parallel using Bash tool calls:
-
-**3a. Codex (GPT-5.3):**
+**3a. Codex (GPT-5.3):** Run in background using Bash with `run_in_background: true` and `dangerouslyDisableSandbox: true`:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/bin/braintrust-codex.sh \
   --project-path "{project_path}" \
@@ -95,7 +98,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/braintrust-codex.sh \
   "{session_dir}/round_{N}/prompt.md"
 ```
 
-**3b. Gemini (3.1 Pro):**
+**3b. Gemini (3.1 Pro):** Run in background using Bash with `run_in_background: true` and `dangerouslyDisableSandbox: true`:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/bin/braintrust-gemini.sh \
   --project-path "{project_path}" \
@@ -109,7 +112,7 @@ Emit `participant_start` event with `{"round":N,"participant":"claude","model":"
 Perform your OWN analysis using Read, Grep, Glob tools directly. You ARE Claude Opus — analyze the codebase based on the prompt, then Write your analysis to `{session_dir}/round_{N}/claude-output.md`.
 After writing, emit `participant_done` event with `{"round":N,"participant":"claude","words":N}` and update dashboard.
 
-**IMPORTANT**: Launch 3a and 3b as parallel Bash calls. While they run, perform your own analysis (3c). Then read all output files.
+**IMPORTANT**: Launch 3a and 3b as parallel Bash calls with `run_in_background: true` and `dangerouslyDisableSandbox: true`. While they run, perform your own analysis (3c). Then read all output files when background tasks complete.
 
 ### Step 4: Collect Results
 
