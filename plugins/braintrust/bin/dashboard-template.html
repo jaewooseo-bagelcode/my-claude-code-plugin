@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Braintrust Meeting Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-muted: #8b949e; --text-dim: #484f58;
+    --green: #3fb950; --green-bg: rgba(63,185,80,0.15);
+    --purple: #a371f7; --purple-bg: rgba(163,113,247,0.15);
+    --blue: #58a6ff; --blue-bg: rgba(88,166,255,0.15);
+    --yellow: #d29922; --yellow-bg: rgba(210,153,34,0.15);
+    --red: #f85149; --red-bg: rgba(248,81,73,0.15);
+    --orange: #db6d28;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; padding:20px; max-width:1400px; margin:0 auto; }
+
+  /* Header */
+  .header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:20px; }
+  .header h1 { font-size:20px; font-weight:600; }
+  .header h1 span { color:var(--text-muted); font-weight:400; font-size:14px; margin-left:8px; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:500; }
+  .badge-setup { background:var(--yellow-bg); color:var(--yellow); }
+  .badge-active { background:var(--green-bg); color:var(--green); }
+  .badge-done { background:var(--blue-bg); color:var(--blue); }
+
+  /* Agenda */
+  .agenda { padding:12px 20px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:20px; }
+  .agenda-label { font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+  .agenda-text { font-size:16px; font-weight:500; }
+
+  /* Participant Grid */
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:20px; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .card-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); }
+  .card-name { font-weight:600; font-size:14px; }
+  .card-model { font-size:11px; color:var(--text-muted); }
+  .card-body { padding:16px; max-height:500px; overflow-y:auto; }
+  .card-body::-webkit-scrollbar { width:6px; }
+  .card-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  .card-codex { border-top:3px solid var(--green); }
+  .card-codex .card-name { color:var(--green); }
+  .card-gemini { border-top:3px solid var(--purple); }
+  .card-gemini .card-name { color:var(--purple); }
+  .card-claude { border-top:3px solid var(--blue); }
+  .card-claude .card-name { color:var(--blue); }
+
+  /* Status badges */
+  .status { font-size:12px; padding:2px 8px; border-radius:10px; }
+  .status-waiting { background:var(--yellow-bg); color:var(--yellow); animation:pulse 2s infinite; }
+  .status-analyzing { background:var(--blue-bg); color:var(--blue); animation:shimmer 1.5s infinite; }
+  .status-done { background:var(--green-bg); color:var(--green); }
+  .status-error { background:var(--red-bg); color:var(--red); }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  @keyframes shimmer { 0%{opacity:0.7} 50%{opacity:1} 100%{opacity:0.7} }
+
+  /* Chair Section */
+  .chair { padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:20px; }
+  .chair-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .chair-icon { font-size:16px; }
+  .chair-title { font-weight:600; }
+  .decision { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .decision-continue { background:var(--yellow-bg); color:var(--yellow); }
+  .decision-done { background:var(--green-bg); color:var(--green); }
+  .chair-question { margin-top:8px; padding:12px; background:rgba(255,255,255,0.03); border-radius:6px; border-left:3px solid var(--yellow); }
+
+  /* Synthesis */
+  .synthesis { padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:20px; border-top:3px solid var(--orange); }
+  .synthesis-title { font-weight:600; font-size:16px; margin-bottom:12px; color:var(--orange); }
+
+  /* Round tabs */
+  .rounds { display:flex; gap:8px; margin-bottom:16px; }
+  .round-tab { padding:6px 14px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; background:var(--surface); border:1px solid var(--border); color:var(--text-muted); transition:all 0.2s; }
+  .round-tab:hover { border-color:var(--text-dim); }
+  .round-tab.active { background:var(--blue-bg); border-color:var(--blue); color:var(--blue); }
+  .round-content { display:none; }
+  .round-content.active { display:block; }
+
+  /* Event timeline */
+  .timeline { background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:20px; }
+  .timeline summary { padding:12px 16px; cursor:pointer; font-weight:500; font-size:13px; color:var(--text-muted); }
+  .timeline-list { padding:0 16px 12px; list-style:none; }
+  .timeline-item { display:flex; gap:12px; padding:4px 0; font-size:12px; border-left:2px solid var(--border); padding-left:12px; margin-left:4px; }
+  .timeline-ts { color:var(--text-dim); white-space:nowrap; min-width:80px; }
+  .timeline-event { color:var(--text-muted); }
+
+  /* Markdown rendering */
+  .md h1,.md h2,.md h3,.md h4 { margin:12px 0 4px; font-weight:600; }
+  .md h1 { font-size:18px; border-bottom:1px solid var(--border); padding-bottom:4px; }
+  .md h2 { font-size:16px; }
+  .md h3 { font-size:14px; }
+  .md h4 { font-size:13px; }
+  .md p { margin:4px 0; }
+  .md strong { font-weight:600; }
+  .md em { font-style:italic; }
+  .md code { background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:4px; font-size:13px; }
+  .md pre { background:rgba(0,0,0,0.3); padding:12px; border-radius:6px; overflow-x:auto; margin:8px 0; }
+  .md pre code { background:none; padding:0; }
+  .md ul,.md ol { margin:8px 0; padding-left:24px; }
+  .md li { margin:4px 0; }
+  .md blockquote { border-left:3px solid var(--border); padding-left:12px; color:var(--text-muted); margin:8px 0; }
+  .md table { border-collapse:collapse; margin:8px 0; width:100%; }
+  .md th,.md td { border:1px solid var(--border); padding:6px 12px; text-align:left; }
+  .md th { background:rgba(255,255,255,0.04); font-weight:600; }
+  .md hr { border:none; border-top:1px solid var(--border); margin:12px 0; }
+
+  /* Empty state */
+  .empty { text-align:center; padding:40px; color:var(--text-muted); }
+  .empty-icon { font-size:32px; margin-bottom:8px; }
+
+  /* Spinner */
+  .spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--blue); border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+<script>
+const STATE = /*__STATE__*/{"meta":{},"events":[],"rounds":[],"synthesis":null,"status":"setup"}/*__END_STATE__*/;
+
+// --- Markdown renderer (block-based) ---
+function renderMd(text) {
+  if (!text) return '';
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Extract code blocks first (preserve from escaping)
+  const codeBlocks = [];
+  text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    codeBlocks.push(`<pre><code class="lang-${lang}">${esc(code.trim())}</code></pre>`);
+    return `\x00CB${codeBlocks.length-1}\x00`;
+  });
+
+  // Split into blocks by blank lines
+  const blocks = text.split(/\n{2,}/);
+  const out = [];
+
+  for (let block of blocks) {
+    block = block.trim();
+    if (!block) continue;
+
+    // Restore code blocks
+    if (/^\x00CB\d+\x00$/.test(block)) {
+      out.push(codeBlocks[parseInt(block.match(/\d+/)[0])]);
+      continue;
+    }
+
+    // Escape HTML
+    block = esc(block);
+
+    // Table block
+    const tableMatch = block.match(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)$/);
+    if (tableMatch) {
+      const ths = tableMatch[1].split('|').filter(c=>c.trim()).map(c=>`<th>${c.trim()}</th>`).join('');
+      const rows = tableMatch[3].trim().split('\n').map(r => {
+        const tds = r.split('|').filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join('');
+        return `<tr>${tds}</tr>`;
+      }).join('');
+      out.push(`<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`);
+      continue;
+    }
+
+    // List block (unordered)
+    if (/^- /.test(block)) {
+      const items = block.split('\n').map(l => {
+        const m = l.match(/^- (.+)$/);
+        return m ? `<li>${inline(m[1])}</li>` : '';
+      }).join('');
+      out.push(`<ul>${items}</ul>`);
+      continue;
+    }
+
+    // List block (ordered)
+    if (/^\d+\. /.test(block)) {
+      const items = block.split('\n').map(l => {
+        const m = l.match(/^\d+\. (.+)$/);
+        return m ? `<li>${inline(m[1])}</li>` : '';
+      }).join('');
+      out.push(`<ol>${items}</ol>`);
+      continue;
+    }
+
+    // Blockquote
+    if (/^&gt; /.test(block)) {
+      const content = block.split('\n').map(l => l.replace(/^&gt; ?/, '')).join(' ');
+      out.push(`<blockquote>${inline(content)}</blockquote>`);
+      continue;
+    }
+
+    // HR
+    if (/^---$/.test(block)) { out.push('<hr>'); continue; }
+
+    // Header
+    const hMatch = block.match(/^(#{1,4}) (.+)$/);
+    if (hMatch) {
+      const lvl = hMatch[1].length;
+      out.push(`<h${lvl}>${inline(hMatch[2])}</h${lvl}>`);
+      continue;
+    }
+
+    // Multi-line block: process line by line for headers mixed with text
+    const lines = block.split('\n');
+    if (lines.length > 1) {
+      let group = [];
+      for (const line of lines) {
+        const lh = line.match(/^(#{1,4}) (.+)$/);
+        if (lh) {
+          if (group.length) { out.push(`<p>${group.map(inline).join('<br>')}</p>`); group = []; }
+          out.push(`<h${lh[1].length}>${inline(lh[2])}</h${lh[1].length}>`);
+        } else {
+          group.push(line);
+        }
+      }
+      if (group.length) out.push(`<p>${group.map(inline).join('<br>')}</p>`);
+      continue;
+    }
+
+    // Plain paragraph
+    out.push(`<p>${inline(block)}</p>`);
+  }
+
+  return out.join('\n');
+}
+
+// Inline markdown formatting
+function inline(s) {
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return s;
+}
+
+// --- Status helpers ---
+function statusBadge(s) {
+  const map = { setup:'badge-setup', done:'badge-done' };
+  const cls = map[s] || 'badge-active';
+  const labels = {
+    setup:'준비 중', done:'완료',
+    synthesis:'합의문 작성 중'
+  };
+  let label = labels[s] || s.replace(/_/g,' ');
+  if (s.startsWith('round_') && s.endsWith('_participants')) {
+    const n = s.match(/round_(\d+)/)[1];
+    label = `라운드 ${n} 분석 중`;
+  } else if (s.startsWith('round_') && s.endsWith('_chair')) {
+    const n = s.match(/round_(\d+)/)[1];
+    label = `라운드 ${n} 의장 판정`;
+  }
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function participantStatus(s) {
+  const labels = { waiting:'대기', analyzing:'분석 중', done:'완료', error:'오류' };
+  return `<span class="status status-${s}">${labels[s]||s}</span>`;
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// --- Auto-refresh via JS (preserves tab state, stops when done) ---
+if (STATE.status !== 'done') {
+  setTimeout(() => location.reload(), 3000);
+}
+
+// --- Render ---
+function render() {
+  const app = document.getElementById('app');
+  const meta = STATE.meta || {};
+  const rounds = STATE.rounds || [];
+  const currentRound = rounds.length > 0 ? rounds.length - 1 : 0;
+
+  let html = '';
+
+  // Header
+  html += `<div class="header">
+    <h1>Braintrust Meeting<span>${meta.meeting_id || ''}</span></h1>
+    <div>${statusBadge(STATE.status)}${STATE.status !== 'done' ? ' <span class="spinner"></span>' : ''}</div>
+  </div>`;
+
+  // Agenda
+  if (meta.agenda) {
+    html += `<div class="agenda">
+      <div class="agenda-label">안건</div>
+      <div class="agenda-text">${meta.agenda}</div>
+      ${meta.context ? `<div style="margin-top:6px;font-size:13px;color:var(--text-muted)">컨텍스트: ${meta.context}</div>` : ''}
+    </div>`;
+  }
+
+  // Empty state
+  if (rounds.length === 0 && STATE.status === 'setup') {
+    html += `<div class="empty"><div class="empty-icon"><span class="spinner" style="width:24px;height:24px;border-width:3px"></span></div><p>회의를 준비하고 있습니다...</p></div>`;
+  }
+
+  // Round tabs
+  if (rounds.length > 0) {
+    html += '<div class="rounds">';
+    rounds.forEach((r, i) => {
+      html += `<div class="round-tab${i===currentRound?' active':''}" onclick="switchRound(${i})">라운드 ${i}</div>`;
+    });
+    html += '</div>';
+
+    // Round contents
+    rounds.forEach((r, i) => {
+      html += `<div class="round-content${i===currentRound?' active':''}" id="round-${i}">`;
+
+      // Participant cards
+      html += '<div class="grid">';
+      const participants = r.participants || {};
+      ['codex','gemini','claude'].forEach(name => {
+        const p = participants[name] || { status:'waiting' };
+        const cardClass = `card-${name}`;
+        const labels = { codex:'GPT-5.3 Codex', gemini:'Gemini 3.1 Pro', claude:'Claude Opus 4.6' };
+        html += `<div class="card ${cardClass}">
+          <div class="card-header">
+            <div>
+              <div class="card-name">${labels[name]}</div>
+              ${p.model ? `<div class="card-model">${p.model}</div>` : ''}
+            </div>
+            ${participantStatus(p.status)}
+          </div>
+          <div class="card-body md">
+            ${p.status === 'waiting' ? '<p style="color:var(--text-dim)">대기 중...</p>' : ''}
+            ${p.status === 'analyzing' ? '<p><span class="spinner"></span> 분석 중...</p>' : ''}
+            ${p.status === 'error' ? `<p style="color:var(--red)">${p.content || '오류 발생'}</p>` : ''}
+            ${p.status === 'done' && p.content ? renderMd(p.content) : ''}
+            ${p.words ? `<p style="margin-top:8px;font-size:12px;color:var(--text-dim)">${p.words.toLocaleString()} words</p>` : ''}
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+
+      // Chair decision
+      if (r.chair && r.chair.decision) {
+        const decCls = r.chair.decision === 'CONTINUE' ? 'decision-continue' : 'decision-done';
+        html += `<div class="chair">
+          <div class="chair-header">
+            <span class="chair-icon">&#9878;</span>
+            <span class="chair-title">의장 판정</span>
+            <span class="decision ${decCls}">${r.chair.decision}</span>
+          </div>
+          ${r.chair.question ? `<div class="chair-question">${r.chair.question}</div>` : ''}
+        </div>`;
+      }
+
+      html += '</div>';
+    });
+  }
+
+  // Synthesis
+  if (STATE.synthesis) {
+    html += `<div class="synthesis">
+      <div class="synthesis-title">합의문 (Synthesis)</div>
+      <div class="md">${renderMd(STATE.synthesis)}</div>
+    </div>`;
+  } else if (STATE.status === 'synthesis') {
+    html += `<div class="synthesis">
+      <div class="synthesis-title"><span class="spinner"></span> 합의문 작성 중...</div>
+    </div>`;
+  }
+
+  // Event timeline
+  if (STATE.events && STATE.events.length > 0) {
+    html += `<details class="timeline"><summary>이벤트 타임라인 (${STATE.events.length})</summary><ul class="timeline-list">`;
+    const eventLabels = {
+      meeting_start:'회의 시작', round_start:'라운드 시작',
+      participant_start:'참여자 시작', participant_done:'참여자 완료', participant_error:'참여자 오류',
+      chair_start:'의장 분석 시작', chair_decision:'의장 판정',
+      synthesis_start:'합의문 작성 시작', synthesis_done:'합의문 완료',
+      meeting_end:'회의 종료'
+    };
+    STATE.events.forEach(e => {
+      const label = eventLabels[e.event] || e.event;
+      let detail = '';
+      if (e.data) {
+        if (e.data.participant) detail += ` [${e.data.participant}]`;
+        if (e.data.decision) detail += ` → ${e.data.decision}`;
+        if (e.data.round !== undefined) detail += ` R${e.data.round}`;
+        if (e.data.words) detail += ` (${e.data.words} words)`;
+        if (e.data.error) detail += ` ⚠ ${e.data.error}`;
+      }
+      html += `<li class="timeline-item"><span class="timeline-ts">${fmtTime(e.ts)}</span><span class="timeline-event">${label}${detail}</span></li>`;
+    });
+    html += '</ul></details>';
+  }
+
+  app.innerHTML = html;
+}
+
+function switchRound(n) {
+  document.querySelectorAll('.round-tab').forEach((t,i) => t.classList.toggle('active', i===n));
+  document.querySelectorAll('.round-content').forEach((c,i) => c.classList.toggle('active', i===n));
+}
+
+document.addEventListener('DOMContentLoaded', render);
+</script>
+<div id="app"></div>
+</body>
+</html>

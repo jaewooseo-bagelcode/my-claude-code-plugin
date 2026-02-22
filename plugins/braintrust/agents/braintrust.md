@@ -19,6 +19,42 @@ You receive from the calling skill:
 - `context`: (optional) Additional context
 - `max_rounds`: (optional, default 3) Maximum discussion rounds
 
+## Dashboard Updates
+
+Throughout the meeting, emit events to `{session_dir}/events.jsonl` and call `update-dashboard.sh` to keep the real-time dashboard in sync.
+
+**How to emit events:**
+```bash
+python3 -c "
+import json, time, sys
+ev = {'ts': int(time.time()*1000), 'event': sys.argv[1], 'data': json.loads(sys.argv[2])}
+with open(sys.argv[3], 'a') as f: f.write(json.dumps(ev, ensure_ascii=False) + '\n')
+" "<event_name>" '<json_data>' "{session_dir}/events.jsonl"
+```
+
+Then update the dashboard:
+```bash
+${CLAUDE_PLUGIN_ROOT}/bin/update-dashboard.sh "{session_dir}" 2>/dev/null &
+```
+
+**Event emission points:**
+- Step 1 (Setup): `meeting_start` with `{"meeting_id":"...","agenda":"...","max_rounds":N}`
+- Step 2 (Prompt): `round_start` with `{"round":N}`
+- Step 3c (Claude start): `participant_start` with `{"round":N,"participant":"claude","model":"claude-opus-4-6"}`
+- Step 3c (Claude done): `participant_done` with `{"round":N,"participant":"claude","words":N}`
+- Step 5 (Chair start): `chair_start` with `{"round":N}`
+- Step 5 (Chair decision): `chair_decision` with `{"round":N,"decision":"CONTINUE|DONE","question":"..."}`
+- Step 6 (Synthesis start): `synthesis_start` with `{}`
+- Step 6 (Synthesis done): `synthesis_done` with `{"words":N}`
+- Step 7 (End): `meeting_end` with `{"total_rounds":N}`
+
+Note: Codex/Gemini shell scripts emit their own `participant_start`/`participant_done`/`participant_error` events automatically.
+
+After Step 1 completes, inform the user:
+```
+Dashboard: .braintrust-sessions/{meeting_id}/dashboard.html
+```
+
 ## Orchestration Flow
 
 ### Step 1: Setup
@@ -27,6 +63,7 @@ You receive from the calling skill:
 2. Generate meeting_id: `YYYYMMDD-HHMMSS` format (use `date +%Y%m%d-%H%M%S`)
 3. Create session directory: `{project_path}/.braintrust-sessions/{meeting_id}/`
 4. Create metadata.json with: `{"meeting_id": "...", "agenda": "...", "context": "...", "created_at": "..."}`
+5. Emit `meeting_start` event and update dashboard
 
 ### Step 2: Build Participant Prompt
 
@@ -40,6 +77,7 @@ You receive from the calling skill:
    - `{context}` → context section (or empty)
    - `{followup_section}` → empty for round 0, chair's follow-up question for subsequent rounds
 4. Save the built prompt to `{session_dir}/round_{N}/prompt.md`
+5. Emit `round_start` event with `{"round":N}` and update dashboard
 
 ### Step 3: Run 3 Participants in Parallel
 
@@ -64,7 +102,9 @@ ${CLAUDE_PLUGIN_ROOT}/bin/braintrust-gemini.sh \
 ```
 
 **3c. Claude (yourself):**
+Emit `participant_start` event with `{"round":N,"participant":"claude","model":"claude-opus-4-6"}` and update dashboard.
 Perform your OWN analysis using Read, Grep, Glob tools directly. You ARE Claude Opus — analyze the codebase based on the prompt, then Write your analysis to `{session_dir}/round_{N}/claude-output.md`.
+After writing, emit `participant_done` event with `{"round":N,"participant":"claude","words":N}` and update dashboard.
 
 **IMPORTANT**: Launch 3a and 3b as parallel Bash calls. While they run, perform your own analysis (3c). Then read all output files.
 
@@ -77,15 +117,17 @@ Read all three output files:
 
 ### Step 5: Chair Analysis (CONTINUE/DONE)
 
-You are also the chair. Review all three analyses and decide:
+You are also the chair. Review all three analyses and decide.
+
+Emit `chair_start` event with `{"round":N}` and update dashboard.
 
 Read the chair analysis template: `${CLAUDE_PLUGIN_ROOT}/prompts/chair-analysis.md`
 
 Format the iterations block by listing each round's question and all three participants' responses.
 
 Then decide:
-- **CONTINUE**: There are gaps, contradictions, or missing perspectives → formulate ONE follow-up question in Korean → go back to Step 2 with the follow-up
-- **DONE**: Sufficient information gathered → proceed to Step 6
+- **CONTINUE**: There are gaps, contradictions, or missing perspectives → formulate ONE follow-up question in Korean → emit `chair_decision` event with `{"round":N,"decision":"CONTINUE","question":"..."}`, update dashboard → go back to Step 2 with the follow-up
+- **DONE**: Sufficient information gathered → emit `chair_decision` event with `{"round":N,"decision":"DONE","question":""}`, update dashboard → proceed to Step 6
 
 **Rules:**
 - Maximum rounds: `max_rounds` (default 3)
@@ -94,11 +136,17 @@ Then decide:
 
 ### Step 6: Final Synthesis
 
+Emit `synthesis_start` event with `{}` and update dashboard.
+
 Read the synthesis template: `${CLAUDE_PLUGIN_ROOT}/prompts/chair-synthesis.md`
 
 Produce the full consensus report following the template format exactly. Write it to `{session_dir}/synthesis.md`.
 
+Emit `synthesis_done` event with `{"words":N}` and update dashboard.
+
 ### Step 7: Return Summary Only
+
+Emit `meeting_end` event with `{"total_rounds":N}` and update dashboard.
 
 Return ONLY a concise summary (max 20 lines). Do NOT include full analyses.
 

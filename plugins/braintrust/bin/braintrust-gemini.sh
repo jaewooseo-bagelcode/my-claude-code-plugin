@@ -62,6 +62,13 @@ ROUND_DIR="$SESSION_DIR/round_${ROUND_NUM}"
 mkdir -p "$ROUND_DIR"
 OUTPUT_FILE="$ROUND_DIR/gemini-output.md"
 MODEL="${GEMINI_MODEL:-gemini-3.1-pro}"
+EVENTS_FILE="$SESSION_DIR/events.jsonl"
+PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# --- Start event ---
+printf '{"ts":%d,"event":"participant_start","data":{"round":%s,"participant":"gemini","model":"%s"}}\n' \
+  "$(date +%s)000" "$ROUND_NUM" "$MODEL" >> "$EVENTS_FILE"
+"$PLUGIN_ROOT/bin/update-dashboard.sh" "$SESSION_DIR" 2>/dev/null &
 
 # --- Execute gemini ---
 (
@@ -78,9 +85,16 @@ MODEL="${GEMINI_MODEL:-gemini-3.1-pro}"
   EXIT_CODE=$?
   echo "Error: gemini exec failed (exit $EXIT_CODE). See $ROUND_DIR/gemini-stderr.log" >&2
   echo "[Gemini failed with exit code $EXIT_CODE]" > "$OUTPUT_FILE"
+  # Error event
+  printf '{"ts":%d,"event":"participant_error","data":{"round":%s,"participant":"gemini","error":"exit code %d"}}\n' \
+    "$(date +%s)000" "$ROUND_NUM" "$EXIT_CODE" >> "$EVENTS_FILE"
+  "$PLUGIN_ROOT/bin/update-dashboard.sh" "$SESSION_DIR" 2>/dev/null &
   exit 0  # Don't fail the whole meeting
 }
 
-# --- Summary ---
+# --- Done event + Summary ---
 WORD_COUNT=$(wc -w < "$OUTPUT_FILE" | tr -d ' ')
+printf '{"ts":%d,"event":"participant_done","data":{"round":%s,"participant":"gemini","words":%s}}\n' \
+  "$(date +%s)000" "$ROUND_NUM" "$WORD_COUNT" >> "$EVENTS_FILE"
+"$PLUGIN_ROOT/bin/update-dashboard.sh" "$SESSION_DIR" 2>/dev/null &
 echo "Gemini analysis saved: $OUTPUT_FILE ($WORD_COUNT words)"
