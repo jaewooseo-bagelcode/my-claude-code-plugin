@@ -75,6 +75,7 @@ codex exec \
   --model "$MODEL" \
   -C "$PROJECT_PATH" \
   --sandbox read-only \
+  --skip-git-repo-check \
   --ephemeral \
   -o "$OUTPUT_FILE" \
   - < "$PROMPT_FILE" \

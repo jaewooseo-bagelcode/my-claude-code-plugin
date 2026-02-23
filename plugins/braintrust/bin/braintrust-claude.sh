@@ -72,7 +72,7 @@ printf '{"ts":%d,"event":"participant_start","data":{"round":%s,"participant":"c
 
 # --- Execute via claude CLI (print mode, bypass nested session check) ---
 # cd /tmp: avoid loading CWD's .claude/ project context (prevents contamination)
-# --append-system-prompt-file: reliable file-based prompt delivery (avoids stdin large-input bug)
+# --system-prompt-file: REPLACES entire default system prompt (--append- still leaked context)
 # --add-dir: grants tool access to target project without loading its CLAUDE.md
 unset CLAUDECODE 2>/dev/null || true
 (cd /tmp && claude -p \
@@ -81,7 +81,7 @@ unset CLAUDECODE 2>/dev/null || true
   --no-session-persistence \
   --dangerously-skip-permissions \
   --add-dir "$PROJECT_PATH" \
-  --append-system-prompt-file "$PROMPT_FILE" \
+  --system-prompt-file "$PROMPT_FILE" \
   "Analyze the codebase according to the system prompt instructions.") \
   > "$OUTPUT_FILE" \
   2>"$ROUND_DIR/claude-stderr.log" || {
