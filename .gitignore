@@ -3,4 +3,5 @@
 .codex-sessions/
 .codex-review-cache/
 .braintrust-sessions/
+.gemini-lens-cache/
 target/

@@ -1,0 +1,7 @@
+{
+  "name": "gemini-lens",
+  "description": "Multimodal visual analysis using Gemini 3.1 Pro — images, videos, screenshots, diagrams, documents",
+  "version": "1.0.0",
+  "author": { "name": "jaewooseo" },
+  "license": "MIT"
+}

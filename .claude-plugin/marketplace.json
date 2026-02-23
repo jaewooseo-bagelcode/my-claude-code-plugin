@@ -19,6 +19,11 @@
       "name": "aiproxy-dev",
       "source": "./plugins/aiproxy-dev",
       "description": "AIProxy API development guide - codeb auth, endpoints, models, SDK patterns for error-free AI API implementation"
+    },
+    {
+      "name": "gemini-lens",
+      "source": "./plugins/gemini-lens",
+      "description": "Multimodal visual analysis using Gemini 3.1 Pro — images, videos, screenshots, diagrams, documents"
     }
   ]
 }
