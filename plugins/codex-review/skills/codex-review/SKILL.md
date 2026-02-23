@@ -17,9 +17,13 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/codex-review.sh \
   "<session-name>" "<review-context>"
 ```
 
-**Session Name**: Generate using plan file pattern (adjective-verb-noun).
-- Examples: "security-reviewing-turing", "auth-analyzing-hopper"
-- Same name for follow-up questions in same review
+**Session Name**: Must be globally unique to prevent cross-contamination in parallel reviews. Generate by combining a descriptive prefix with a random suffix:
+```
+<prefix>-!`openssl rand -hex 4`
+```
+- Prefix: short descriptor (e.g., "security", "auth-review", "perf")
+- Examples: `security-a3f7b2c1`, `auth-review-7d4e9f3a`, `perf-1bc8d4ef`
+- For follow-up questions on a completed review, reuse the exact same session name
 
 **Review Context**: Structured context for Codex analysis (see Context Preparation below).
 
@@ -34,7 +38,7 @@ PRIORITY: Critical security first
 """
 
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-reviewing-turing" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-{random_hex}" "{review_context}"',
     description="Security review"
 )
 ```
@@ -148,14 +152,14 @@ Bash(
 
 ## Session Management
 
-**Session naming**: Use plan file pattern (adjective-verb-noun) for readable, unique names.
+**Session naming**: Descriptive prefix + random hex suffix for guaranteed uniqueness.
 
 **Examples**:
-- `security-reviewing-turing`
-- `performance-auditing-knuth`
-- `auth-analyzing-hopper`
+- `security-a3f7b2c1`
+- `perf-audit-7d4e9f3a`
+- `auth-1bc8d4ef`
 
-**Follow-up**: Reuse same session name to continue conversation.
+**Follow-up**: Reuse the exact same session name to continue conversation.
 
 ## Context Construction Workflow
 
@@ -304,7 +308,7 @@ PRIORITY: Security vulnerabilities first
 
 [Execute with Bash]
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-reviewing-turing" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-{random_hex}" "{review_context}"',
     description="Security review"
 )
 
@@ -364,7 +368,7 @@ PRIORITY: Security and bugs first
 """
 
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "comprehensive-reviewing-lovelace" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "comprehensive-{random_hex}" "{review_context}"',
     description="Comprehensive review"
 )
 ```
@@ -381,7 +385,7 @@ Bash(
 7. **Be specific**: "Security audit for SQL injection" > "Review this"
 8. **Batch related files**: Review login.ts + middleware.ts together rather than separately
 9. **Default to comprehensive**: If focus unclear but file is clear, do comprehensive review
-10. **Parallel reviews**: Use multiple subagents to review different files concurrently
+10. **Parallel reviews**: Use multiple subagents to review different files concurrently. Each review MUST have a unique session name (random hex suffix ensures this)
 
 ### When to Use Context7
 
