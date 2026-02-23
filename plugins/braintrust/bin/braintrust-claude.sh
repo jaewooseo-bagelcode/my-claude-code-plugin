@@ -71,14 +71,18 @@ printf '{"ts":%d,"event":"participant_start","data":{"round":%s,"participant":"c
 "$PLUGIN_ROOT/bin/update-dashboard.sh" "$SESSION_DIR" 2>/dev/null &
 
 # --- Execute via claude CLI (print mode, bypass nested session check) ---
+# cd /tmp: avoid loading CWD's .claude/ project context (prevents contamination)
+# --append-system-prompt-file: reliable file-based prompt delivery (avoids stdin large-input bug)
+# --add-dir: grants tool access to target project without loading its CLAUDE.md
 unset CLAUDECODE 2>/dev/null || true
-claude -p \
+(cd /tmp && claude -p \
   --model "$MODEL" \
   --output-format text \
   --no-session-persistence \
   --dangerously-skip-permissions \
   --add-dir "$PROJECT_PATH" \
-  - < "$PROMPT_FILE" \
+  --append-system-prompt-file "$PROMPT_FILE" \
+  "Analyze the codebase according to the system prompt instructions.") \
   > "$OUTPUT_FILE" \
   2>"$ROUND_DIR/claude-stderr.log" || {
     EXIT_CODE=$?
