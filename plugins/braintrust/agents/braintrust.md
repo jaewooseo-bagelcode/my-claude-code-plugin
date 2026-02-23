@@ -75,14 +75,6 @@ ${CLAUDE_PLUGIN_ROOT}/bin/update-dashboard.sh "{session_dir}" 2>/dev/null &
 
 Note: Codex/Gemini shell scripts emit their own `participant_start`/`participant_done`/`participant_error` events automatically.
 
-After Step 1 completes, open the dashboard in the browser and inform the user:
-```bash
-open "{session_dir}/dashboard.html"
-```
-```
-Dashboard: .braintrust-sessions/{meeting_id}/dashboard.html
-```
-
 ## Orchestration Flow
 
 ### Step 1: Setup
@@ -92,6 +84,10 @@ Dashboard: .braintrust-sessions/{meeting_id}/dashboard.html
 3. Create session directory: `{project_path}/.braintrust-sessions/{meeting_id}/`
 4. Create metadata.json with: `{"meeting_id": "...", "agenda": "...", "context": "...", "created_at": "..."}`
 5. Emit `meeting_start` event and update dashboard
+6. **Open dashboard in browser** (this MUST happen before Step 2):
+   ```bash
+   open "{session_dir}/dashboard.html"
+   ```
 
 ### Step 2: Build Participant Prompt
 
