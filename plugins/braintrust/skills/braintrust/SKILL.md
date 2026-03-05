@@ -1,11 +1,11 @@
 ---
 name: braintrust
-description: Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6 analyze the codebase in parallel, then chair AI (Sonnet 4.6 1M) drives multi-round discussion to produce a consensus report. Use actively for important technical decisions.
+description: Runs a multi-AI consensus meeting where 3 AIs (GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6) analyze the codebase in parallel and a chair drives multi-round discussion to produce a consensus report. Invoked when the user says "braintrust", "multi-AI meeting", "AI 회의", "consensus review", or needs multiple AI perspectives on architecture, design decisions, or code analysis.
 ---
 
 # Braintrust Meeting
 
-3 AIs (GPT-5.3 Codex, Gemini 3.1 Pro, Claude Opus 4.6) analyze the codebase in parallel, then the chair (Sonnet 4.6 1M) drives multi-round discussion to produce a consensus report.
+3 AIs analyze the codebase in parallel, then the chair drives multi-round discussion to produce a consensus report.
 
 ## Plan Mode
 

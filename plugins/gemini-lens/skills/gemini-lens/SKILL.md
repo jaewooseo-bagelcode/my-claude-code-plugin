@@ -1,12 +1,6 @@
 ---
 name: gemini-lens
-description: >
-  Multimodal visual analysis using Gemini 3.1 Pro. Analyzes images, videos,
-  screenshots, diagrams, and documents for UI/UX review, comparison, OCR,
-  debugging, and general visual Q&A. Triggers on "analyze this image",
-  "review this UI", "compare these screenshots", "OCR this", "describe this video",
-  "what's in this screenshot", "extract text from". NOT for code review — use
-  codex-review. NOT for code generation from images.
+description: Runs Gemini 3.1 Pro multimodal visual analysis via a Bash script. Analyzes images, videos, screenshots, diagrams, and documents for UI/UX review, comparison, OCR, debugging, and general visual Q&A. Invoked when the user says "analyze this image", "review this UI", "compare these screenshots", "OCR this", "describe this video", "what's in this screenshot", or "extract text from". Does NOT perform code review — codex-review handles that.
 ---
 
 # Instructions
@@ -130,7 +124,7 @@ Include fetched guidelines in the analysis prompt as `REFERENCE GUIDELINES:` sec
 - Google AI API key configured for gemini CLI
 
 **Optional**:
-- `GEMINI_MODEL` — override model (default: `gemini-3.1-pro-preview`)
+- `GEMINI_MODEL` — override model (default: `gemini-3-flash-preview`)
 
 **Cache**: `{project}/.gemini-lens-cache/analyses/` (project-isolated)
 

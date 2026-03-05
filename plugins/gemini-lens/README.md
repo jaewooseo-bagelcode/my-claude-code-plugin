@@ -53,7 +53,7 @@ bash bin/gemini-lens.sh \
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GEMINI_MODEL` | `gemini-3.1-pro-preview` | Gemini model to use |
+| `GEMINI_MODEL` | `gemini-3-flash-preview` | Gemini model to use |
 
 ## Cache
 

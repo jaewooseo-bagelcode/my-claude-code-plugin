@@ -1,6 +1,6 @@
 ---
 name: codex-review
-description: Professional code review and analysis using GPT-5.3-Codex (READ-ONLY, never modifies code). Analyzes bugs, security vulnerabilities, performance issues, and code quality. Provides detailed reports with actionable suggestions but does NOT implement fixes. Use when the user wants to understand code issues, find bugs, or get improvement suggestions. Triggers on phrases like "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", "identify issues". NOT for implementing fixes - use codex-task-executor for that.
+description: Runs GPT-5.3-Codex code review via a Bash script — READ-ONLY, never modifies code. Analyzes bugs, security vulnerabilities, performance issues, and code quality. Produces detailed reports with actionable suggestions. Invoked when the user says "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", or "identify issues". Does NOT implement fixes — codex-task-executor handles that.
 ---
 
 # Instructions
@@ -12,7 +12,7 @@ Execute Codex-powered code review with complete context preparation.
 ## Invocation
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/bin/codex-review.sh \
+bash ${CLAUDE_PLUGIN_ROOT}/bin/codex-appserver-review.sh \
   --project-path "!`git rev-parse --show-toplevel`" \
   "<session-name>" "<review-context>"
 ```
@@ -23,7 +23,6 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/codex-review.sh \
 ```
 - Prefix: short descriptor (e.g., "security", "auth-review", "perf")
 - Examples: `security-a3f7b2c1`, `auth-review-7d4e9f3a`, `perf-1bc8d4ef`
-- For follow-up questions on a completed review, reuse the exact same session name
 
 **Review Context**: Structured context for Codex analysis (see Context Preparation below).
 
@@ -38,7 +37,7 @@ PRIORITY: Critical security first
 """
 
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-{random_hex}" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-{random_hex}" "{review_context}"',
     description="Security review"
 )
 ```
@@ -144,7 +143,7 @@ PRIORITY: Modern React compliance, then security
 """
 
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
     description="React review"
 )
 ```
@@ -158,8 +157,6 @@ Bash(
 - `security-a3f7b2c1`
 - `perf-audit-7d4e9f3a`
 - `auth-1bc8d4ef`
-
-**Follow-up**: Reuse the exact same session name to continue conversation.
 
 ## Context Construction Workflow
 
@@ -247,8 +244,7 @@ You (Claude Code):
 **Optional**:
 - `OPENAI_MODEL` — override model (default: `gpt-5.3-codex`)
 
-**Sessions**: `{project}/.codex-sessions/` (project-isolated)
-**Cache**: `{project}/.codex-review-cache/` (reviews + verifications)
+**Cache**: `{project}/.codex-review-cache/reviews/` (`.json` + `.md` per session), `verifications/` (verify-review output)
 
 ## Analysis Framework
 
@@ -308,11 +304,12 @@ PRIORITY: Security vulnerabilities first
 
 [Execute with Bash]
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-{random_hex}" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-{random_hex}" "{review_context}"',
     description="Security review"
 )
 
-[Bash returns summary only]
+[Bash returns structured summary]
+→ Score: 6/10
 → Critical: 1 | High: 1 | Medium: 2 | Low: 0
 → Full report: .codex-review-cache/reviews/security-reviewing-turing.md
 
@@ -368,7 +365,7 @@ PRIORITY: Security and bugs first
 """
 
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "comprehensive-{random_hex}" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "comprehensive-{random_hex}" "{review_context}"',
     description="Comprehensive review"
 )
 ```
@@ -377,7 +374,7 @@ Bash(
 ## Best Practices
 
 1. **Use conversation context**: Don't ask if you already know
-2. **Summary-only output**: codex-review.sh returns severity counts + file path only; read full report from cache on demand
+2. **Summary-only output**: codex-appserver-review.sh returns a structured summary (score, severity table, summary text) + cache file path; read full report from cache on demand
 3. **Fetch latest docs with Context7**: When code uses external libraries, query Context7 BEFORE invoking
 4. **Preview files**: Use Read tool to check file content and detect dependencies
 5. **Identify related files**: Check imports, dependencies, tests
@@ -385,7 +382,6 @@ Bash(
 7. **Be specific**: "Security audit for SQL injection" > "Review this"
 8. **Batch related files**: Review login.ts + middleware.ts together rather than separately
 9. **Default to comprehensive**: If focus unclear but file is clear, do comprehensive review
-10. **Parallel reviews**: Use multiple subagents to review different files concurrently. Each review MUST have a unique session name (random hex suffix ensures this)
 
 ### When to Use Context7
 
@@ -424,7 +420,7 @@ Check code compliance with these latest guidelines.
 
 # Step 4: Execute
 Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-review.sh --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
+    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
     description="Security review"
 )
 ```
@@ -433,7 +429,7 @@ Bash(
 
 ## Cross-Model Verification (Post-Review)
 
-After codex-review.sh completes, it saves the full review to a cache file and prints only a summary with severity counts and the file path.
+After codex-appserver-review.sh completes, it saves the full review to a cache file and prints only a summary with severity counts and the file path.
 
 ### When to Verify
 
@@ -455,11 +451,11 @@ The agent reads the review from the file independently, verifies each finding ag
 
 ### Presenting Results
 
-**IMPORTANT: Do NOT Read the cache files.** The summaries from codex-review.sh and verify-review contain all information needed to present results. Reading the full report files wastes main context (~2-3K tokens each). Only Read them when the user explicitly asks for details (e.g., "show me the full report", "more details on finding X").
+**IMPORTANT: Do NOT Read the cache files.** The summaries from codex-appserver-review.sh and verify-review contain all information needed to present results. Reading the full report files wastes main context (~2-3K tokens each). Only Read them when the user explicitly asks for details (e.g., "show me the full report", "more details on finding X").
 
 Present the unified summary from both steps:
 
-1. Codex review summary (from codex-review.sh stdout — severity table + score)
+1. Codex review summary (from codex-appserver-review.sh stdout — severity table + score)
 2. Verification summary (from verify-review return — verdict table + confidence)
 3. Confirmed Critical/High action items (title only, from verification summary)
 4. File paths for on-demand access

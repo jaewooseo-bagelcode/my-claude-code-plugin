@@ -126,29 +126,22 @@ claude --plugin-dir ./plugins/plugin-a --plugin-dir ./plugins/plugin-b
 ```
 plugins/
 ├── Cargo.toml                    # Workspace root (resolver = "2")
-├── aiproxy-common/               # Shared core library
-│   ├── src/{config,session,sse/*,tools/*}.rs
-│   └── tests/e2e_{tools,sse,session,config,streaming}.rs
-└── braintrust/scripts/           # Multi-AI consensus (uses aiproxy-common)
+└── codex-appserver/              # Codex App Server JSON-RPC client + review binary
+    ├── src/appserver/{client,protocol}.rs
+    ├── src/bin/codex_appserver_review.rs
+    └── tests/e2e_appserver.rs
 ```
 
-### aiproxy-common E2E 테스트 (반드시 유지)
+### codex-appserver E2E 테스트
 
-**의도**: `aiproxy-common`은 braintrust의 공통 의존성이다. 이 코어 레이어에 버그가 있으면 하위 플러그인에 전파된다. 레이어를 분리한 가치는 코어를 독립적으로 검증할 수 있다는 데 있다.
+**실행**: `cargo test -p codex-appserver` (76 tests)
 
-**실행**: `cargo test -p aiproxy-common` (139 tests)
+**커버리지**:
+- `appserver/protocol` — JSON-RPC request/response/notification 직렬화, ServerMessage 파싱, ReviewOutput 스키마
+- `appserver/client` — 텍스트 축적, UTF-8 truncation, ShutdownStatus
+- `bin/codex_appserver_review` — multi-object JSON 파싱, 에러 케이스
 
-**커버리지 (100% 도구)**:
-- `tools/glob` — `**` recursive, max_results, dual naming, skip .git
-- `tools/grep` — files_with_matches/content/count, regex, glob filter, case_insensitive, context, head_limit
-- `tools/read` — offset/limit/end_line, path traversal rejection, deny list, directory rejection
-- `tools/git_diff` — default/base branch/file path, invalid branch rejection, fallback chain
-- `sse/` — SseParser + OpenAI Responses/Chat + Anthropic Messages + Gemini streamGenerateContent
-- `session` — JsonlLogger write/nil-safe/append, ParticipantSession lifecycle/serde, summarize_args
-- `config` — aiproxy/direct mode URL routing, auth headers, project memory loading
-- `streaming` — StreamingResult accumulation, OpenAI/Anthropic/Gemini stream parsing
-
-**규칙**: aiproxy-common 코드를 변경할 때 반드시 `cargo test -p aiproxy-common`을 돌리고, 실패하면 머지하지 않는다.
+**규칙**: codex-appserver 코드를 변경할 때 반드시 `cargo test -p codex-appserver`를 돌리고, 실패하면 머지하지 않는다.
 
 ## Plugin Release Workflow
 

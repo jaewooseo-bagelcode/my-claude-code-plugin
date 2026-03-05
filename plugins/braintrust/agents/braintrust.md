@@ -105,36 +105,19 @@ Note: Codex/Gemini shell scripts emit their own `participant_start`/`participant
 
 ### Step 3: Run 3 Participants in Parallel
 
-Launch ALL THREE as parallel Bash calls with `run_in_background: true` and `dangerouslyDisableSandbox: true`:
+Run a single `run-round.sh` call that launches all 3 participants (Codex, Gemini, Claude) in parallel internally and waits for completion:
 
-**3a. Codex (GPT-5.3):**
 ```bash
-PLUGIN_ROOT/bin/braintrust-codex.sh \
+PLUGIN_ROOT/bin/run-round.sh \
   --project-path "{project_path}" \
   --session-dir "{session_dir}" \
   --round {N} \
   "{session_dir}/round_{N}/prompt.md"
 ```
 
-**3b. Gemini (3.1 Pro):**
-```bash
-PLUGIN_ROOT/bin/braintrust-gemini.sh \
-  --project-path "{project_path}" \
-  --session-dir "{session_dir}" \
-  --round {N} \
-  "{session_dir}/round_{N}/prompt.md"
-```
+Use `dangerouslyDisableSandbox: true`. Do NOT use `run_in_background` — the script handles parallelism internally and returns when all participants finish.
 
-**3c. Claude (Opus 4.6):**
-```bash
-PLUGIN_ROOT/bin/braintrust-claude.sh \
-  --project-path "{project_path}" \
-  --session-dir "{session_dir}" \
-  --round {N} \
-  "{session_dir}/round_{N}/prompt.md"
-```
-
-**IMPORTANT**: Launch all 3 as parallel Bash calls with `run_in_background: true` and `dangerouslyDisableSandbox: true`. Wait for all background tasks to complete, then proceed to Step 4.
+The script guarantees all 3 participants run. It exits 0 if at least 1 succeeds, exit 1 if all fail.
 
 ### Step 4: Collect Results
 

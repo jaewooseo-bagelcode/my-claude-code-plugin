@@ -1,0 +1,16 @@
+[package]
+name = "codex-appserver"
+version = "0.2.0"
+edition = "2021"
+
+[[bin]]
+name = "codex-appserver-review"
+path = "src/bin/codex_appserver_review.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+tempfile = "3"

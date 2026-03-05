@@ -1,6 +1,6 @@
 ---
 name: aiproxy-dev
-description: AIProxy API development guide. Ensures accurate endpoints, auth, models, and SDK patterns when implementing code that calls AI APIs (OpenAI, Anthropic, Google, ElevenLabs, Moonshot) through AIProxy. Auto-reference when writing AI API integration code.
+description: Provides AIProxy API endpoint, auth, model, and SDK patterns for implementing AI API calls (OpenAI, Anthropic, Google, ElevenLabs, Moonshot) through the BagelCode AIProxy. Invoked when the user says "aiproxy", "codeb", "AI API 연동", or writes code that imports openai/anthropic/google SDKs and targets the AIProxy base URL.
 ---
 
 # AIProxy Development Guide
