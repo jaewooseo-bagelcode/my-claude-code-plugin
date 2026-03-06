@@ -1,7 +1,7 @@
 {
   "name": "codex-review",
   "description": "Professional code review and analysis using GPT-5.4 (READ-ONLY). Analyzes bugs, security vulnerabilities, performance issues, and code quality with detailed reports.",
-  "version": "3.5.4",
+  "version": "3.5.5",
   "author": {
     "name": "jaewooseo"
   },

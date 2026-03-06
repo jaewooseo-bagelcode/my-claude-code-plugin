@@ -145,9 +145,9 @@ fi
 PLAN_CONTENT=$(cat "$PLAN_FILE")
 
 # --- Build prompt from template ---
-TEMP_PROMPT=$(mktemp "${TMPDIR:-/tmp}/codex-coder-XXXXXX.md")
-TEMP_MEMORY=$(mktemp "${TMPDIR:-/tmp}/codex-memory-XXXXXX.txt")
-TEMP_PLAN=$(mktemp "${TMPDIR:-/tmp}/codex-plan-XXXXXX.txt")
+TEMP_PROMPT=$(mktemp "${TMPDIR:-/tmp}/codex-coder-XXXXXX")
+TEMP_MEMORY=$(mktemp "${TMPDIR:-/tmp}/codex-memory-XXXXXX")
+TEMP_PLAN=$(mktemp "${TMPDIR:-/tmp}/codex-plan-XXXXXX")
 trap 'rm -f "$TEMP_PROMPT" "$TEMP_MEMORY" "$TEMP_PLAN"' EXIT
 
 TEMPLATE="$SCRIPT_DIR/coder-instructions.md"

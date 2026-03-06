@@ -118,8 +118,8 @@ load_project_memory() {
 PROJECT_MEMORY=$(load_project_memory)
 
 # --- Build prompt from template ---
-TEMP_PROMPT=$(mktemp "${TMPDIR:-/tmp}/codex-review-XXXXXX.md")
-TEMP_MEMORY=$(mktemp "${TMPDIR:-/tmp}/codex-memory-XXXXXX.txt")
+TEMP_PROMPT=$(mktemp "${TMPDIR:-/tmp}/codex-review-XXXXXX")
+TEMP_MEMORY=$(mktemp "${TMPDIR:-/tmp}/codex-memory-XXXXXX")
 trap 'rm -f "$TEMP_PROMPT" "$TEMP_MEMORY"' EXIT
 
 TEMPLATE="$SCRIPT_DIR/review-instructions.md"

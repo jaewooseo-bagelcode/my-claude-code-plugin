@@ -167,8 +167,8 @@ load_project_memory() {
 PROJECT_MEMORY=$(load_project_memory)
 
 # --- Build prompt from template ---
-TEMP_PROMPT=$(mktemp "${TMPDIR:-/tmp}/gemini-lens-XXXXXX.md")
-TEMP_MEMORY=$(mktemp "${TMPDIR:-/tmp}/gemini-memory-XXXXXX.txt")
+TEMP_PROMPT=$(mktemp "${TMPDIR:-/tmp}/gemini-lens-XXXXXX")
+TEMP_MEMORY=$(mktemp "${TMPDIR:-/tmp}/gemini-memory-XXXXXX")
 trap 'rm -f "$TEMP_PROMPT" "$TEMP_MEMORY"' EXIT
 
 TEMPLATE="$SCRIPT_DIR/analysis-instructions.md"
@@ -211,7 +211,7 @@ done
 
 # --- Execute gemini ---
 MODEL="${GEMINI_MODEL:-gemini-3-flash-preview}"
-GEMINI_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/gemini-output-XXXXXX.txt")
+GEMINI_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/gemini-output-XXXXXX")
 STDERR_LOG="${TMPDIR:-/tmp}/gemini-lens-stderr-$SESSION_NAME.log"
 trap 'rm -f "$TEMP_PROMPT" "$TEMP_MEMORY" "$GEMINI_OUTPUT"' EXIT
 
