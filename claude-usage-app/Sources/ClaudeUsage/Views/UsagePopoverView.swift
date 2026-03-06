@@ -194,13 +194,16 @@ struct ActiveOrgRow: View {
             if let fiveHour = account.fiveHour {
                 UsageBarView(icon: "bolt.fill", label: "Session",
                              value: fiveHour.utilization, resetDate: fiveHour.resetDate)
+                    .saturation(isMenuBarSource ? 1.0 : 0.3)
             }
             if let sevenDay = account.sevenDay {
                 UsageBarView(icon: "calendar", label: "Weekly",
                              value: sevenDay.utilization, resetDate: sevenDay.resetDate)
+                    .saturation(isMenuBarSource ? 1.0 : 0.3)
             }
             if let extra = account.extraUsage, extra.isEnabled {
                 ExtraUsageBarView(extra: extra)
+                    .saturation(isMenuBarSource ? 1.0 : 0.3)
             }
 
             if account.fiveHour == nil && account.sevenDay == nil && account.error == nil {
