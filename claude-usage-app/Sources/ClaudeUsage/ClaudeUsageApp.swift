@@ -17,7 +17,7 @@ struct ClaudeUsageApp: App {
     // MARK: - Render colored menu bar image
 
     private func renderMenuBar() -> NSImage {
-        guard let p = appState.activeAccounts.first,
+        guard let p = appState.menuBarAccount,
               let session = p.fiveHour?.utilization,
               let weekly = p.sevenDay?.utilization
         else {

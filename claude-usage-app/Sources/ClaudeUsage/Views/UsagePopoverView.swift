@@ -148,12 +148,27 @@ struct AccountGroupView: View {
 // MARK: - Active Org Row (full bars)
 
 struct ActiveOrgRow: View {
+    @Environment(AppState.self) private var appState
     let account: Account
+
+    private var isMenuBarSource: Bool {
+        appState.menuBarAccount?.orgId == account.orgId
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            // Org name + plan badge
+            // Org name + plan badge + pin
             HStack(spacing: 6) {
+                Button {
+                    appState.menuBarOrgId = account.orgId
+                } label: {
+                    Image(systemName: isMenuBarSource ? "chart.bar.fill" : "chart.bar")
+                        .font(.caption)
+                        .foregroundStyle(isMenuBarSource ? .blue : .gray.opacity(0.4))
+                }
+                .buttonStyle(.borderless)
+                .help("Show in menu bar")
+
                 Text(account.organizationName.isEmpty ? account.planType.capitalized : account.organizationName)
                     .font(.system(.headline, design: .rounded))
                     .lineLimit(1)

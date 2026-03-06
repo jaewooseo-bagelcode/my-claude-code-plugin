@@ -10,6 +10,9 @@ final class AppState {
     var activeEmail: String {
         didSet { UserDefaults.standard.set(activeEmail, forKey: "activeEmail") }
     }
+    var menuBarOrgId: String {
+        didSet { UserDefaults.standard.set(menuBarOrgId, forKey: "menuBarOrgId") }
+    }
     var browsers: [UUID: BrowserAuthService] = [:]
     private var pollTimer: Timer?
 
@@ -30,16 +33,15 @@ final class AppState {
         accounts.filter { $0.email != activeEmail || activeEmail.isEmpty }
     }
 
-    /// First active account drives the menu bar
     var menuBarText: String {
-        guard let p = activeAccounts.first else { return "--·--" }
+        guard let p = menuBarAccount else { return "--·--" }
         let s = Int(p.fiveHour?.utilization ?? 0)
         let w = Int(p.sevenDay?.utilization ?? 0)
         return "\(s)·\(w)"
     }
 
     var statusColor: StatusColor {
-        let util = activeAccounts.compactMap { $0.fiveHour?.utilization }.max() ?? 0
+        let util = menuBarAccount?.fiveHour?.utilization ?? 0
         if util >= 90 { return .red }
         if util >= 75 { return .yellow }
         return .normal
@@ -47,8 +49,15 @@ final class AppState {
 
     enum StatusColor { case normal, yellow, red }
 
+    /// The account shown in the menu bar
+    var menuBarAccount: Account? {
+        accounts.first { $0.orgId == menuBarOrgId }
+            ?? activeAccounts.first
+    }
+
     init() {
         activeEmail = UserDefaults.standard.string(forKey: "activeEmail") ?? ""
+        menuBarOrgId = UserDefaults.standard.string(forKey: "menuBarOrgId") ?? ""
         accounts = KeychainService.loadAccounts()
 
         // Backfill empty emails from org name (e.g. "user@example.com's Organization")
