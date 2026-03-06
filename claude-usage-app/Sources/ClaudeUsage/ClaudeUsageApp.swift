@@ -3,6 +3,14 @@ import SwiftUI
 @main
 struct ClaudeUsageApp: App {
     @State private var appState = AppState()
+    @State private var alertBlink = false
+    @State private var blinkTimer: Timer?
+
+    private var isAlert: Bool {
+        guard let p = appState.menuBarAccount else { return false }
+        return (p.fiveHour?.utilization ?? 0) >= 95
+            || (p.sevenDay?.utilization ?? 0) >= 95
+    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -10,8 +18,31 @@ struct ClaudeUsageApp: App {
                 .environment(appState)
         } label: {
             Image(nsImage: renderMenuBar())
+                .onChange(of: isAlert) { _, alert in
+                    if alert {
+                        startBlinkTimer()
+                    } else {
+                        stopBlinkTimer()
+                    }
+                }
+                .onAppear {
+                    if isAlert { startBlinkTimer() }
+                }
         }
         .menuBarExtraStyle(.window)
+    }
+
+    private func startBlinkTimer() {
+        guard blinkTimer == nil else { return }
+        blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { _ in
+            Task { @MainActor in alertBlink.toggle() }
+        }
+    }
+
+    private func stopBlinkTimer() {
+        blinkTimer?.invalidate()
+        blinkTimer = nil
+        alertBlink = false
     }
 
     // MARK: - Render colored menu bar image
@@ -36,14 +67,14 @@ struct ClaudeUsageApp: App {
         return renderView {
             HStack(spacing: 5) {
                 // Session mini bar + number
-                MiniBarLabel(value: session)
+                MiniBarLabel(value: session, dimmed: alertBlink && session >= 95)
 
                 Text("·")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.4))
 
                 // Weekly mini bar + number
-                MiniBarLabel(value: weekly)
+                MiniBarLabel(value: weekly, dimmed: alertBlink && weekly >= 95)
             }
         }
     }
@@ -74,6 +105,7 @@ struct ClaudeUsageApp: App {
 
 struct MiniBarLabel: View {
     let value: Double
+    var dimmed: Bool = false
 
     private var barColor: Color {
         if value >= 90 { return .red }
@@ -105,5 +137,6 @@ struct MiniBarLabel: View {
                 .monospacedDigit()
                 .foregroundStyle(textColor)
         }
+        .opacity(dimmed ? 0.2 : 1.0)
     }
 }
