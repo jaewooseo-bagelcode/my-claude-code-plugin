@@ -1,11 +1,13 @@
 //! E2E tests for the appserver module.
-//! Tests protocol types, serialization, deserialization, and review output parsing.
+//! Tests protocol types, serialization, deserialization, review output parsing,
+//! and coder output parsing.
 //! Does NOT require a running codex process — tests the client library logic only.
 
 use codex_appserver::appserver::client::ShutdownStatus;
 use codex_appserver::appserver::protocol::{
-    review_output_schema, Dimension, Finding, JsonRpcError, JsonRpcNotification, JsonRpcRequest,
-    ReviewOutput, ServerMessage, Severity,
+    coder_output_schema, review_output_schema, CoderOutput, CoderStatus, Dimension, FileAction,
+    FileChange, Finding, JsonRpcError, JsonRpcNotification, JsonRpcRequest, ReviewOutput,
+    ServerMessage, Severity,
 };
 use serde_json::{json, Value};
 
@@ -1215,4 +1217,382 @@ fn simulate_review_with_turn_correlation() {
     // Verify the matched completion is correct
     let comp = matching_completion.unwrap();
     assert_eq!(comp["turn"]["status"], "completed");
+}
+
+// ============================================================================
+// CoderOutput — deserialization
+// ============================================================================
+
+#[test]
+fn coder_output_deserializes_completed() {
+    let json_str = r#"{
+        "status": "completed",
+        "summary": "Implemented rate limiting",
+        "files_changed": [
+            {"path": "src/middleware/rate-limit.ts", "action": "created", "description": "Rate limiting middleware"},
+            {"path": "src/auth/login.ts", "action": "modified", "description": "Applied rate limiter"}
+        ],
+        "notes": []
+    }"#;
+    let output: CoderOutput = serde_json::from_str(json_str).unwrap();
+    assert_eq!(output.status, CoderStatus::Completed);
+    assert_eq!(output.files_changed.len(), 2);
+    assert_eq!(output.files_changed[0].action, FileAction::Created);
+    assert_eq!(output.files_changed[1].action, FileAction::Modified);
+    assert!(output.notes.is_empty());
+}
+
+#[test]
+fn coder_output_deserializes_partial() {
+    let json_str = r#"{
+        "status": "partial",
+        "summary": "Created middleware but could not modify login",
+        "files_changed": [
+            {"path": "src/middleware/rate-limit.ts", "action": "created", "description": "Rate limiting middleware"}
+        ],
+        "notes": ["Could not find login handler entry point"]
+    }"#;
+    let output: CoderOutput = serde_json::from_str(json_str).unwrap();
+    assert_eq!(output.status, CoderStatus::Partial);
+    assert_eq!(output.files_changed.len(), 1);
+    assert_eq!(output.notes.len(), 1);
+}
+
+#[test]
+fn coder_output_deserializes_blocked() {
+    let json_str = r#"{
+        "status": "blocked",
+        "summary": "Missing dependency",
+        "files_changed": [],
+        "notes": ["express-rate-limit package not installed"]
+    }"#;
+    let output: CoderOutput = serde_json::from_str(json_str).unwrap();
+    assert_eq!(output.status, CoderStatus::Blocked);
+    assert!(output.files_changed.is_empty());
+    assert_eq!(output.notes.len(), 1);
+}
+
+#[test]
+fn coder_output_deserializes_deleted_action() {
+    let json_str = r#"{
+        "status": "completed",
+        "summary": "Removed deprecated module",
+        "files_changed": [
+            {"path": "src/old-module.ts", "action": "deleted", "description": "Removed deprecated module"}
+        ],
+        "notes": []
+    }"#;
+    let output: CoderOutput = serde_json::from_str(json_str).unwrap();
+    assert_eq!(output.files_changed[0].action, FileAction::Deleted);
+}
+
+#[test]
+fn coder_output_rejects_invalid_status() {
+    let json_str = r#"{
+        "status": "unknown",
+        "summary": "s",
+        "files_changed": [],
+        "notes": []
+    }"#;
+    let result = serde_json::from_str::<CoderOutput>(json_str);
+    assert!(result.is_err());
+}
+
+#[test]
+fn coder_output_rejects_invalid_action() {
+    let json_str = r#"{
+        "status": "completed",
+        "summary": "s",
+        "files_changed": [{"path": "f", "action": "renamed", "description": "d"}],
+        "notes": []
+    }"#;
+    let result = serde_json::from_str::<CoderOutput>(json_str);
+    assert!(result.is_err());
+}
+
+#[test]
+fn coder_output_rejects_missing_required_fields() {
+    let json_str = r#"{"status": "completed", "summary": "s"}"#;
+    let result = serde_json::from_str::<CoderOutput>(json_str);
+    assert!(result.is_err());
+}
+
+#[test]
+fn coder_output_rejects_extra_fields() {
+    let json_str = r#"{
+        "status": "completed",
+        "summary": "s",
+        "files_changed": [],
+        "notes": [],
+        "extra": 1
+    }"#;
+    let result = serde_json::from_str::<CoderOutput>(json_str);
+    assert!(result.is_err(), "CoderOutput must reject unknown fields");
+}
+
+#[test]
+fn file_change_rejects_extra_fields() {
+    let json_str = r#"{
+        "status": "completed",
+        "summary": "s",
+        "files_changed": [{"path": "f", "action": "created", "description": "d", "extra": true}],
+        "notes": []
+    }"#;
+    let result = serde_json::from_str::<CoderOutput>(json_str);
+    assert!(result.is_err(), "FileChange must reject unknown fields");
+}
+
+#[test]
+fn coder_output_serializes_roundtrip() {
+    let output = CoderOutput {
+        status: CoderStatus::Completed,
+        summary: "done".to_string(),
+        files_changed: vec![FileChange {
+            path: "src/main.ts".to_string(),
+            action: FileAction::Modified,
+            description: "Updated entry point".to_string(),
+        }],
+        notes: vec!["All good".to_string()],
+    };
+    let json = serde_json::to_string(&output).unwrap();
+    let parsed: CoderOutput = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.status, CoderStatus::Completed);
+    assert_eq!(parsed.files_changed.len(), 1);
+    assert_eq!(parsed.files_changed[0].path, "src/main.ts");
+}
+
+// ============================================================================
+// CoderStatus — Display
+// ============================================================================
+
+#[test]
+fn coder_status_display() {
+    assert_eq!(format!("{}", CoderStatus::Completed), "completed");
+    assert_eq!(format!("{}", CoderStatus::Partial), "partial");
+    assert_eq!(format!("{}", CoderStatus::Blocked), "blocked");
+}
+
+// ============================================================================
+// FileAction — Display
+// ============================================================================
+
+#[test]
+fn file_action_display() {
+    assert_eq!(format!("{}", FileAction::Created), "created");
+    assert_eq!(format!("{}", FileAction::Modified), "modified");
+    assert_eq!(format!("{}", FileAction::Deleted), "deleted");
+}
+
+// ============================================================================
+// coder_output_schema — schema validation
+// ============================================================================
+
+#[test]
+fn coder_schema_has_required_fields() {
+    let schema = coder_output_schema();
+    assert_eq!(schema["type"], "object");
+
+    let required = schema["required"].as_array().unwrap();
+    let req_strs: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
+    assert!(req_strs.contains(&"status"));
+    assert!(req_strs.contains(&"summary"));
+    assert!(req_strs.contains(&"files_changed"));
+    assert!(req_strs.contains(&"notes"));
+}
+
+#[test]
+fn coder_schema_status_has_enum() {
+    let schema = coder_output_schema();
+    let status = &schema["properties"]["status"];
+    assert_eq!(status["type"], "string");
+    let enums = status["enum"].as_array().unwrap();
+    assert_eq!(enums.len(), 3);
+    assert!(enums.contains(&json!("completed")));
+    assert!(enums.contains(&json!("partial")));
+    assert!(enums.contains(&json!("blocked")));
+}
+
+#[test]
+fn coder_schema_files_changed_item_has_action_enum() {
+    let schema = coder_output_schema();
+    let action = &schema["properties"]["files_changed"]["items"]["properties"]["action"];
+    assert_eq!(action["type"], "string");
+    let enums = action["enum"].as_array().unwrap();
+    assert_eq!(enums.len(), 3);
+    assert!(enums.contains(&json!("created")));
+    assert!(enums.contains(&json!("modified")));
+    assert!(enums.contains(&json!("deleted")));
+}
+
+#[test]
+fn coder_schema_disallows_additional_properties() {
+    let schema = coder_output_schema();
+    assert_eq!(schema["additionalProperties"], false);
+}
+
+#[test]
+fn coder_schema_files_changed_items_disallows_additional_properties() {
+    let schema = coder_output_schema();
+    let items = &schema["properties"]["files_changed"]["items"];
+    assert_eq!(items["additionalProperties"], false);
+}
+
+#[test]
+fn coder_schema_files_changed_items_required_has_all_fields() {
+    let schema = coder_output_schema();
+    let items_required = schema["properties"]["files_changed"]["items"]["required"]
+        .as_array()
+        .unwrap();
+    let req_strs: Vec<&str> = items_required.iter().map(|v| v.as_str().unwrap()).collect();
+    assert!(req_strs.contains(&"path"));
+    assert!(req_strs.contains(&"action"));
+    assert!(req_strs.contains(&"description"));
+}
+
+#[test]
+fn coder_schema_has_all_file_change_fields() {
+    let schema = coder_output_schema();
+    let props = &schema["properties"]["files_changed"]["items"]["properties"];
+    for field in &["path", "action", "description"] {
+        assert!(
+            props.get(field).is_some(),
+            "files_changed items schema must have property '{field}'"
+        );
+    }
+}
+
+// ============================================================================
+// Simulate full coder stream (production hardening)
+// ============================================================================
+
+#[test]
+fn simulate_full_coder_stream() {
+    let messages = vec![
+        // Response to initialize
+        r#"{"jsonrpc":"2.0","id":1,"result":{"serverInfo":"codex-app-server/0.1.0"}}"#,
+        // Response to thread/start (workspace-write)
+        r#"{"jsonrpc":"2.0","id":2,"result":{"thread":{"id":"thr_coder_1","status":"active"}}}"#,
+        // Response to turn/start
+        r#"{"jsonrpc":"2.0","id":3,"result":{"id":"turn_c1","status":"in_progress"}}"#,
+        // Streaming deltas
+        r#"{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":"{\"status\":\"completed\""}}"#,
+        r#"{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":",\"summary\":\"done\",\"files_changed\":[{\"path\":\"a.ts\",\"action\":\"created\",\"description\":\"new file\"}]"}}"#,
+        r#"{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":",\"notes\":[]}"}}"#,
+        // turn/completed
+        r#"{"jsonrpc":"2.0","method":"turn/completed","params":{"turn":{"id":"turn_c1","status":"completed"}}}"#,
+    ];
+
+    let mut agent_text = String::new();
+    let mut turn_completed = false;
+    let mut thread_id = String::new();
+
+    for line in &messages {
+        let msg = ServerMessage::parse(line).unwrap();
+        match msg {
+            ServerMessage::Response(resp) => {
+                if let Some(result) = resp.result {
+                    if let Some(tid) = result
+                        .get("thread")
+                        .and_then(|t| t.get("id"))
+                        .and_then(|v| v.as_str())
+                    {
+                        thread_id = tid.to_string();
+                    }
+                }
+            }
+            ServerMessage::Notification { method, params } => match method.as_str() {
+                "item/agentMessage/delta" => {
+                    if let Some(delta) = params.get("delta").and_then(|d| d.as_str()) {
+                        agent_text.push_str(delta);
+                    }
+                }
+                "turn/completed" => {
+                    turn_completed = true;
+                }
+                _ => {}
+            },
+        }
+    }
+
+    assert_eq!(thread_id, "thr_coder_1");
+    assert!(turn_completed);
+
+    // Parse the accumulated text as CoderOutput
+    let output: CoderOutput = serde_json::from_str(&agent_text).unwrap();
+    assert_eq!(output.status, CoderStatus::Completed);
+    assert_eq!(output.files_changed.len(), 1);
+    assert_eq!(output.files_changed[0].path, "a.ts");
+    assert_eq!(output.summary, "done");
+}
+
+// ============================================================================
+// Multi-JSON-object stream simulation for coder (production hardening)
+// ============================================================================
+
+#[test]
+fn simulate_coder_multi_object_stream_last_is_output() {
+    let reasoning = r#"{"thinking":"reading files and planning..."}"#;
+    let final_answer = r#"{"status":"completed","summary":"implemented feature","files_changed":[{"path":"src/new.ts","action":"created","description":"new module"}],"notes":[]}"#;
+
+    let mut agent_text = String::new();
+    agent_text.push_str(reasoning);
+    agent_text.push_str(final_answer);
+
+    // Extract all top-level JSON objects
+    let mut objects = Vec::new();
+    let mut depth = 0i32;
+    let mut start = None;
+    let mut in_string = false;
+    let mut escape_next = false;
+
+    for (i, ch) in agent_text.char_indices() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+        if ch == '\\' && in_string {
+            escape_next = true;
+            continue;
+        }
+        if ch == '"' {
+            in_string = !in_string;
+            continue;
+        }
+        if in_string {
+            continue;
+        }
+        match ch {
+            '{' => {
+                if depth == 0 {
+                    start = Some(i);
+                }
+                depth += 1;
+            }
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    if let Some(s) = start {
+                        objects.push(&agent_text[s..=i]);
+                    }
+                    start = None;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    assert_eq!(objects.len(), 2);
+
+    // Last valid CoderOutput wins
+    let mut output = None;
+    for obj in objects.iter().rev() {
+        if let Ok(r) = serde_json::from_str::<CoderOutput>(obj) {
+            output = Some(r);
+            break;
+        }
+    }
+
+    let output = output.expect("Should find a valid CoderOutput");
+    assert_eq!(output.status, CoderStatus::Completed);
+    assert_eq!(output.summary, "implemented feature");
 }

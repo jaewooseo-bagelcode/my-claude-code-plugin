@@ -137,20 +137,22 @@ claude --plugin-dir ./plugins/plugin-a --plugin-dir ./plugins/plugin-b
 ```
 plugins/
 ├── Cargo.toml                    # Workspace root (resolver = "2")
-└── codex-appserver/              # Codex App Server JSON-RPC client + review binary
+└── codex-appserver/              # Codex App Server JSON-RPC client + binaries
     ├── src/appserver/{client,protocol}.rs
     ├── src/bin/codex_appserver_review.rs
+    ├── src/bin/codex_appserver_coder.rs
     └── tests/e2e_appserver.rs
 ```
 
 ### codex-appserver E2E 테스트
 
-**실행**: `cargo test -p codex-appserver` (76 tests)
+**실행**: `cargo test -p codex-appserver` (85 tests)
 
 **커버리지**:
-- `appserver/protocol` — JSON-RPC request/response/notification 직렬화, ServerMessage 파싱, ReviewOutput 스키마
+- `appserver/protocol` — JSON-RPC 직렬화, ServerMessage 파싱, ReviewOutput/CoderOutput 스키마, deny_unknown_fields
 - `appserver/client` — 텍스트 축적, UTF-8 truncation, ShutdownStatus
 - `bin/codex_appserver_review` — multi-object JSON 파싱, 에러 케이스
+- `bin/codex_appserver_coder` — multi-object JSON 파싱, session name validation, 에러 케이스
 
 **규칙**: codex-appserver 코드를 변경할 때 반드시 `cargo test -p codex-appserver`를 돌리고, 실패하면 머지하지 않는다.
 
