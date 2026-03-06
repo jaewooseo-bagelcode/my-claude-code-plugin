@@ -25,8 +25,19 @@ my-claude-code-plugin/
 │       │   └── hooks.json        # Hook event handlers
 │       ├── .mcp.json             # MCP server definitions (optional)
 │       └── README.md
+├── claude-usage-app/             # macOS menu bar app (NOT a plugin)
+│   ├── Package.swift             # SPM package, macOS 14+
+│   ├── Sources/ClaudeUsage/      # SwiftUI app source
+│   ├── Resources/                # Info.plist, AppIcon.icns
+│   └── scripts/build-app.sh     # Release build + Developer ID signing
 └── CLAUDE.md
 ```
+
+### claude-usage-app (standalone, NOT in marketplace)
+
+macOS menu bar app that monitors Claude AI usage limits via Safari + AppleScript.
+Uses cookie-authenticated claude.ai web API. Multi-account with active/inactive model.
+Build: `cd claude-usage-app && bash scripts/build-app.sh` → `cp -R ClaudeUsage.app /Applications/`
 
 ## Plugin Development
 
