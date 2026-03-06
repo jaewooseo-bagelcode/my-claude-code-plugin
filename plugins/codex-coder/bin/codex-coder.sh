@@ -135,8 +135,8 @@ PROJECT_MEMORY=$(load_project_memory)
 PLAN_CACHE_DIR="$REPO_ROOT/.codex-coder-cache/plans"
 mkdir -p "$PLAN_CACHE_DIR"
 PLAN_CACHE_DEST="$PLAN_CACHE_DIR/${SESSION_NAME}.md"
-PLAN_FILE_REAL=$(cd "$(dirname "$PLAN_FILE")" && pwd)/$(basename "$PLAN_FILE")
-PLAN_CACHE_REAL=$(cd "$(dirname "$PLAN_CACHE_DEST")" && pwd)/$(basename "$PLAN_CACHE_DEST")
+PLAN_FILE_REAL=$(cd "$(dirname "$PLAN_FILE")" && pwd -P)/$(basename "$PLAN_FILE")
+PLAN_CACHE_REAL=$(cd "$(dirname "$PLAN_CACHE_DEST")" && pwd -P)/$(basename "$PLAN_CACHE_DEST")
 if [[ "$PLAN_FILE_REAL" != "$PLAN_CACHE_REAL" ]]; then
   cp "$PLAN_FILE" "$PLAN_CACHE_DEST"
 fi

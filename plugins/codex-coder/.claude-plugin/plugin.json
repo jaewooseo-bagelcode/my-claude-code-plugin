@@ -1,7 +1,7 @@
 {
   "name": "codex-coder",
   "description": "AI-powered code implementation using GPT-5.4 with workspace-write sandbox. Writes code based on precise task plans.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": { "name": "jaewooseo" },
   "license": "MIT"
 }
