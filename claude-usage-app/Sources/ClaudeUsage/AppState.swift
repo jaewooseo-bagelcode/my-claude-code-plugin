@@ -79,6 +79,15 @@ final class AppState {
             browsers[account.id] = BrowserAuthService(accountId: account.id)
         }
         startPolling()
+
+        // Refresh on wake from sleep
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            logger.info("System woke from sleep — restarting poll")
+            self?.startPolling()
+        }
     }
 
     // MARK: - Polling (active accounts only)

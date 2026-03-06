@@ -16,22 +16,33 @@ final class BrowserAuthService: @unchecked Sendable {
     // MARK: - AppleScript helpers
 
     @discardableResult
-    private func runAppleScript(_ source: String) async throws -> String {
-        try await withCheckedThrowingContinuation { cont in
-            DispatchQueue.global().async {
-                var error: NSDictionary?
-                guard let script = NSAppleScript(source: source) else {
-                    cont.resume(throwing: BrowserAuthError.commandFailed("Invalid AppleScript"))
-                    return
-                }
-                let result = script.executeAndReturnError(&error)
-                if let error {
-                    let msg = error[NSAppleScript.errorMessage] as? String ?? "AppleScript error"
-                    cont.resume(throwing: BrowserAuthError.commandFailed(msg))
-                } else {
-                    cont.resume(returning: result.stringValue ?? "")
+    private func runAppleScript(_ source: String, timeout: TimeInterval = 30) async throws -> String {
+        try await withThrowingTaskGroup(of: String.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { cont in
+                    DispatchQueue.global().async {
+                        var error: NSDictionary?
+                        guard let script = NSAppleScript(source: source) else {
+                            cont.resume(throwing: BrowserAuthError.commandFailed("Invalid AppleScript"))
+                            return
+                        }
+                        let result = script.executeAndReturnError(&error)
+                        if let error {
+                            let msg = error[NSAppleScript.errorMessage] as? String ?? "AppleScript error"
+                            cont.resume(throwing: BrowserAuthError.commandFailed(msg))
+                        } else {
+                            cont.resume(returning: result.stringValue ?? "")
+                        }
+                    }
                 }
             }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeout))
+                throw BrowserAuthError.commandFailed("AppleScript timed out after \(Int(timeout))s")
+            }
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
     }
 
@@ -53,7 +64,7 @@ final class BrowserAuthService: @unchecked Sendable {
         """)
     }
 
-    /// Execute JS in any claude.ai tab (finds one, or opens a new tab)
+    /// Execute JS in any claude.ai tab (finds one, or opens a hidden tab)
     @discardableResult
     private func safariJSClaudeTab(_ js: String) async throws -> String {
         let escaped = escapeJS(js)
@@ -63,24 +74,29 @@ final class BrowserAuthService: @unchecked Sendable {
             if (count of windows) > 0 then
                 repeat with w in windows
                     repeat with t in tabs of w
-                        if URL of t starts with "https://claude.ai" then
-                            set foundTab to t
-                            exit repeat
-                        end if
+                        try
+                            if URL of t starts with "https://claude.ai" then
+                                set foundTab to t
+                                exit repeat
+                            end if
+                        end try
                     end repeat
                     if foundTab is not missing value then exit repeat
                 end repeat
             end if
 
             if foundTab is missing value then
-                if (count of windows) = 0 then
-                    make new document with properties {URL:"https://claude.ai/settings"}
-                else
-                    tell front window
-                        set current tab to (make new tab with properties {URL:"https://claude.ai/settings"})
-                    end tell
-                end if
-                delay 5
+                -- Create a hidden window for background API calls
+                set newDoc to make new document with properties {URL:"https://claude.ai/settings"}
+                set visible of front window to false
+                -- Wait up to 15s for page to load
+                repeat 15 times
+                    delay 1
+                    try
+                        set pageURL to URL of current tab of front window
+                        if pageURL starts with "https://claude.ai" then exit repeat
+                    end try
+                end repeat
                 set foundTab to current tab of front window
             end if
 
