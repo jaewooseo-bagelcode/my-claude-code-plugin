@@ -8,16 +8,18 @@ struct Account: Identifiable, Codable {
     var planType: String
     var label: String?
 
-    // Transient (not persisted)
     var fiveHour: UsageMetric?
     var sevenDay: UsageMetric?
     var sevenDaySonnet: UsageMetric?
     var extraUsage: ExtraUsage?
     var lastUpdated: Date?
+
+    // Transient (not persisted)
     var error: String?
 
     enum CodingKeys: String, CodingKey {
         case id, orgId, email, organizationName, planType, label
+        case fiveHour, sevenDay, sevenDaySonnet, extraUsage, lastUpdated
     }
 
     var displayName: String {

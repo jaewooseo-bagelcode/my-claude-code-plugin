@@ -5,7 +5,7 @@ struct UsagePopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header: title + all action buttons
+            // Header
             HStack(spacing: 8) {
                 Text("Claude Usage")
                     .font(.headline)
@@ -56,13 +56,7 @@ struct UsagePopoverView: View {
                 Divider()
             }
 
-            // Active account (full detail)
-            if let active = appState.activeAccount {
-                AccountRowView(account: active, isActive: true) {
-                    appState.removeAccount(active)
-                }
-                .padding(.vertical, 8)
-            } else if appState.accounts.isEmpty && appState.loginStep == .idle {
+            if appState.accounts.isEmpty && appState.loginStep == .idle {
                 VStack(spacing: 6) {
                     Image(systemName: "person.crop.circle.badge.plus")
                         .font(.title2)
@@ -75,17 +69,194 @@ struct UsagePopoverView: View {
                 .padding(.vertical, 16)
             }
 
-            // Inactive accounts (compact)
-            ForEach(appState.inactiveAccounts) { account in
-                Divider()
-                AccountRowView(account: account, isActive: false) {
-                    appState.removeAccount(account)
+            // Active account group (full detail)
+            if !appState.activeAccounts.isEmpty {
+                AccountGroupView(
+                    email: appState.activeEmail,
+                    accounts: appState.activeAccounts,
+                    isActive: true
+                ) {
+                    appState.removeAccountGroup(email: appState.activeEmail)
                 }
                 .padding(.vertical, 6)
+            }
+
+            // Inactive account groups (compact)
+            let inactiveGroups = Dictionary(grouping: appState.inactiveAccounts, by: \.email)
+            ForEach(inactiveGroups.keys.sorted(), id: \.self) { email in
+                if let group = inactiveGroups[email] {
+                    Divider()
+                    AccountGroupView(
+                        email: email,
+                        accounts: group,
+                        isActive: false
+                    ) {
+                        appState.removeAccountGroup(email: email)
+                    }
+                    .padding(.vertical, 4)
+                }
             }
         }
         .padding()
         .frame(width: 320)
+    }
+}
+
+// MARK: - Account Group (email → multiple orgs)
+
+struct AccountGroupView: View {
+    let email: String
+    let accounts: [Account]
+    let isActive: Bool
+    let onRemoveGroup: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isActive ? 8 : 4) {
+            // Group header
+            HStack {
+                Text(email.isEmpty ? "Unknown" : email)
+                    .font(.system(isActive ? .subheadline : .caption, design: .rounded))
+                    .foregroundStyle(isActive ? .primary : .secondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Menu {
+                    Button("Remove All", role: .destructive) { onRemoveGroup() }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(isActive ? .body : .caption2)
+                        .foregroundStyle(isActive ? .secondary : .tertiary)
+                }
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+
+            // Org rows
+            ForEach(accounts) { account in
+                if isActive {
+                    ActiveOrgRow(account: account)
+                } else {
+                    InactiveOrgRow(account: account)
+                }
+            }
+        }
+        .opacity(isActive ? 1.0 : 0.7)
+    }
+}
+
+// MARK: - Active Org Row (full bars)
+
+struct ActiveOrgRow: View {
+    let account: Account
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            // Org name + plan badge
+            HStack(spacing: 6) {
+                Text(account.organizationName.isEmpty ? account.planType.capitalized : account.organizationName)
+                    .font(.system(.headline, design: .rounded))
+                    .lineLimit(1)
+
+                Text(account.planType.capitalized)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(.blue.opacity(0.2))
+                    .foregroundStyle(.blue)
+                    .clipShape(Capsule())
+
+                Spacer()
+
+                if account.error != nil {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .help(account.error ?? "")
+                }
+            }
+
+            // Usage bars
+            if let fiveHour = account.fiveHour {
+                UsageBarView(icon: "bolt.fill", label: "Session",
+                             value: fiveHour.utilization, resetDate: fiveHour.resetDate)
+            }
+            if let sevenDay = account.sevenDay {
+                UsageBarView(icon: "calendar", label: "Weekly",
+                             value: sevenDay.utilization, resetDate: sevenDay.resetDate)
+            }
+            if let extra = account.extraUsage, extra.isEnabled {
+                ExtraUsageBarView(extra: extra)
+            }
+
+            if account.fiveHour == nil && account.sevenDay == nil && account.error == nil {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("Loading...").font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+
+            if let lastUpdated = account.lastUpdated {
+                Text("Updated \(lastUpdated, style: .relative) ago")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
+// MARK: - Inactive Org Row (compact one-liner)
+
+struct InactiveOrgRow: View {
+    let account: Account
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(account.organizationName.isEmpty ? account.planType.capitalized : account.organizationName)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Text(account.planType.capitalized)
+                    .font(.system(size: 9).bold())
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(.primary.opacity(0.08))
+                    .foregroundStyle(.tertiary)
+                    .clipShape(Capsule())
+
+                Spacer()
+            }
+
+            // Session + Weekly summary
+            HStack(spacing: 12) {
+                if let s = account.fiveHour {
+                    HStack(spacing: 3) {
+                        Image(systemName: "bolt.fill").font(.system(size: 9))
+                        Text("Session \(Int(s.utilization))%")
+                    }
+                    .font(.caption2).foregroundStyle(.tertiary)
+                }
+                if let w = account.sevenDay {
+                    HStack(spacing: 3) {
+                        Image(systemName: "calendar").font(.system(size: 9))
+                        Text("Weekly \(Int(w.utilization))%")
+                    }
+                    .font(.caption2).foregroundStyle(.tertiary)
+                }
+                if let extra = account.extraUsage, extra.isEnabled {
+                    HStack(spacing: 3) {
+                        Image(systemName: "dollarsign.circle").font(.system(size: 9))
+                        Text("$\(String(format: "%.0f", extra.usedDollars))")
+                    }
+                    .font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+
+            if account.fiveHour == nil && account.sevenDay == nil {
+                Text("No data")
+                    .font(.caption2).foregroundStyle(.quaternary)
+            }
+        }
     }
 }
 
@@ -128,24 +299,20 @@ struct LoginStatusView: View {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Log in via the browser window")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             case .extracting:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Extracting account info...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             default:
                 EmptyView()
             }
 
             if let error = appState.loginError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(.red)
             }
         }
         .padding(.vertical, 8)

@@ -158,10 +158,12 @@ final class BrowserAuthService: @unchecked Sendable {
         let orgName: String
     }
 
-    func extractAccountInfo() async throws -> AccountInfo {
-        debugLog("extractAccountInfo START")
+    /// Extract ALL organizations from the current Safari session.
+    /// One login can have multiple orgs (e.g. Personal + Enterprise).
+    func extractAllOrganizations() async throws -> [AccountInfo] {
+        debugLog("extractAllOrganizations START")
 
-        // Check if any Safari tab is already on settings/usage; if not, navigate
+        // Navigate to settings if needed
         let currentUrl = (try? await runAppleScript("""
         tell application "Safari"
             URL of current tab of front window
@@ -178,88 +180,84 @@ final class BrowserAuthService: @unchecked Sendable {
 
         try await Task.sleep(for: .seconds(4))
 
-        // Step 1: Extract orgId from performance entries or HTML
-        let orgJS = """
-        (function() {
-            var entries = performance.getEntriesByType('resource');
-            for (var i = 0; i < entries.length; i++) {
-                var m = entries[i].name.match(/organizations\\/([0-9a-f-]{36})/);
-                if (m) return JSON.stringify({orgId: m[1], plan: document.documentElement.dataset.orgPlan || ''});
-            }
-            var html = document.body ? document.body.innerHTML : '';
-            var m2 = html.match(/organizations\\/([0-9a-f-]{36})/);
-            if (m2) return JSON.stringify({orgId: m2[1], plan: document.documentElement.dataset.orgPlan || ''});
-            return '';
-        })()
-        """
+        // Fetch all organizations
+        let orgsJS = "var x=new XMLHttpRequest();x.open('GET','/api/organizations',false);x.send();x.responseText"
 
-        var orgId = ""
-        var planType = ""
-
+        var orgsData: [[String: Any]] = []
         for attempt in 0..<15 {
             let result: String
             do {
-                result = try await safariJSCurrentTab(orgJS)
+                result = try await safariJSCurrentTab(orgsJS)
             } catch {
-                debugLog("extractAccountInfo[\(attempt)] JS ERROR: \(error)")
+                debugLog("extractAllOrgs[\(attempt)] JS ERROR: \(error)")
                 try await Task.sleep(for: .seconds(2))
                 continue
             }
-            debugLog("extractAccountInfo[\(attempt)] result=\(result)")
 
-            if !result.isEmpty,
-               let data = result.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-               let id = json["orgId"], !id.isEmpty
+            if let data = result.data(using: .utf8),
+               let parsed = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+               !parsed.isEmpty
             {
-                orgId = id
-                planType = json["plan"] ?? ""
+                orgsData = parsed
+                debugLog("extractAllOrgs: found \(parsed.count) orgs")
                 break
             }
 
             try await Task.sleep(for: .seconds(2))
         }
 
-        guard !orgId.isEmpty else { throw BrowserAuthError.orgNotFound }
+        guard !orgsData.isEmpty else { throw BrowserAuthError.orgNotFound }
 
-        // Step 2: Fetch org details (name, email) via API
-        let detailJS = "var x=new XMLHttpRequest();x.open('GET','/api/organizations',false);x.send();x.responseText"
+        // Get email from current account (try multiple API fields)
         var email = ""
-        var orgName = ""
-
-        if let detailResult = try? await safariJSCurrentTab(detailJS),
-           let detailData = detailResult.data(using: .utf8),
-           let orgs = try? JSONSerialization.jsonObject(with: detailData) as? [[String: Any]]
+        let emailJS = "var x=new XMLHttpRequest();x.open('GET','/api/auth/current_account',false);x.send();x.responseText"
+        if let emailResult = try? await safariJSCurrentTab(emailJS),
+           let emailData = emailResult.data(using: .utf8),
+           let account = try? JSONSerialization.jsonObject(with: emailData) as? [String: Any]
         {
-            debugLog("extractAccountInfo: orgs count=\(orgs.count)")
-            for org in orgs {
-                if let id = org["uuid"] as? String, id == orgId {
-                    orgName = org["name"] as? String ?? ""
-                    // email might be in settings or join_token
-                    if let settings = org["settings"] as? [String: Any] {
-                        email = settings["primary_email"] as? String ?? ""
-                    }
+            email = account["email_address"] as? String
+                ?? account["email"] as? String
+                ?? account["primary_email"] as? String
+                ?? ""
+            debugLog("extractAllOrgs: email from current_account=\(email) keys=\(Array(account.keys))")
+        }
+
+        // Fallback: extract email from org name (e.g. "user@example.com's Organization")
+        if email.isEmpty {
+            for org in orgsData {
+                let name = org["name"] as? String ?? ""
+                if let range = name.range(of: #"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"#, options: .regularExpression) {
+                    email = String(name[range])
+                    debugLog("extractAllOrgs: email from org name=\(email)")
                     break
                 }
             }
         }
 
-        // Step 3: Try to get email from account info if not found
-        if email.isEmpty {
-            let emailJS = "var x=new XMLHttpRequest();x.open('GET','/api/auth/current_account',false);x.send();x.responseText"
-            if let emailResult = try? await safariJSCurrentTab(emailJS),
-               let emailData = emailResult.data(using: .utf8),
-               let account = try? JSONSerialization.jsonObject(with: emailData) as? [String: Any]
-            {
-                email = account["email_address"] as? String
-                    ?? account["email"] as? String
-                    ?? ""
-                debugLog("extractAccountInfo: email from account=\(email)")
+        // Build AccountInfo for each org that has chat capability
+        var results: [AccountInfo] = []
+        for org in orgsData {
+            guard let orgId = org["uuid"] as? String, !orgId.isEmpty else { continue }
+
+            // Skip API-only orgs (no chat = no usage to monitor)
+            let capabilities = org["capabilities"] as? [String] ?? []
+            guard capabilities.contains("chat") else {
+                debugLog("extractAllOrgs: skip API-only org \(orgId)")
+                continue
             }
+
+            let name = org["name"] as? String ?? ""
+            var plan = ""
+            if capabilities.contains("raven_enterprise") { plan = "enterprise" }
+            else if capabilities.contains("claude_max") { plan = "claude_max" }
+            else if capabilities.contains("raven") { plan = "pro" }
+            else { plan = "free" }
+
+            debugLog("extractAllOrgs: org=\(orgId) name=\(name) plan=\(plan)")
+            results.append(AccountInfo(orgId: orgId, planType: plan, email: email, orgName: name))
         }
 
-        debugLog("extractAccountInfo: org=\(orgId) name=\(orgName) email=\(email) plan=\(planType)")
-        return AccountInfo(orgId: orgId, planType: planType, email: email, orgName: orgName)
+        return results
     }
 
     // MARK: - Fetch usage (via synchronous XHR in Safari)
@@ -289,19 +287,47 @@ final class BrowserAuthService: @unchecked Sendable {
         // No-op — Safari is the user's browser, we don't close it
     }
 
-    /// Logout from claude.ai in Safari so next Add Account gets a fresh login
+    /// Logout from claude.ai in Safari so next Add Account gets a fresh login.
+    /// Clears cookies via JS then navigates to logout URL and waits for login page.
     func logoutSafari() async {
-        debugLog("logoutSafari")
-        _ = try? await safariJSCurrentTab(
-            "fetch('/api/auth/logout',{method:'POST',credentials:'include'})"
+        debugLog("logoutSafari START")
+
+        // Method 1: POST to logout endpoint
+        _ = try? await safariJSClaudeTab(
+            "var x=new XMLHttpRequest();x.open('POST','/api/auth/logout',false);x.send();x.status"
         )
-        try? await Task.sleep(for: .seconds(1))
-        // Navigate to login page so it's ready for next add
+
+        // Method 2: Navigate to logout URL directly
+        try? await runAppleScript("""
+        tell application "Safari"
+            set URL of current tab of front window to "https://claude.ai/api/auth/logout"
+        end tell
+        """)
+
+        try? await Task.sleep(for: .seconds(2))
+
+        // Navigate to login page
         try? await runAppleScript("""
         tell application "Safari"
             set URL of current tab of front window to "https://claude.ai/login"
         end tell
         """)
+
+        // Wait until we're actually on the login page (not auto-redirected back)
+        for _ in 0..<15 {
+            try? await Task.sleep(for: .seconds(1))
+            let url = (try? await runAppleScript("""
+            tell application "Safari"
+                URL of current tab of front window
+            end tell
+            """)) ?? ""
+            debugLog("logoutSafari: url=\(url)")
+            if url.contains("/login") {
+                debugLog("logoutSafari: SUCCESS — on login page")
+                return
+            }
+        }
+        debugLog("logoutSafari: may not have fully logged out")
     }
 
     func clearSession() async {
