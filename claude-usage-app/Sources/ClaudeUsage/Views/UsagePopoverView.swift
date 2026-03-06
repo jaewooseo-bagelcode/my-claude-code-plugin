@@ -78,6 +78,15 @@ struct UsagePopoverView: View {
                     .foregroundStyle(.secondary)
                 }
 
+                Button {
+                    claudeAuthLogin()
+                } label: {
+                    Label("CLI Login", systemImage: "terminal")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Run 'claude auth login' via Safari")
+
                 Spacer()
 
                 Button("Quit") {
@@ -90,6 +99,37 @@ struct UsagePopoverView: View {
         }
         .padding()
         .frame(width: 320)
+    }
+}
+
+// MARK: - Claude CLI Auth
+
+/// Runs `claude auth login` with Safari as the browser
+private func claudeAuthLogin() {
+    Task.detached {
+        // Write a helper script that opens URLs in Safari
+        let helper = FileManager.default.temporaryDirectory.appendingPathComponent("open-safari.sh")
+        try? "#!/bin/bash\nopen -a Safari \"$@\"\n".write(to: helper, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+
+        let process = Process()
+        // Try common paths for claude binary
+        let paths = [
+            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin/claude",
+            "/usr/local/bin/claude",
+            "/opt/homebrew/bin/claude",
+        ]
+        guard let claudePath = paths.first(where: { FileManager.default.fileExists(atPath: $0) }) else { return }
+        process.executableURL = URL(fileURLWithPath: claudePath)
+        process.arguments = ["auth", "login"]
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            ["BROWSER": helper.path]
+        ) { _, new in new }
+
+        try? process.run()
+        process.waitUntilExit()
+
+        try? FileManager.default.removeItem(at: helper)
     }
 }
 
