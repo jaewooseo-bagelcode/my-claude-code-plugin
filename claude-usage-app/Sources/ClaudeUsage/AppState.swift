@@ -110,6 +110,7 @@ final class AppState {
                 // Create or update account
                 if let existing = accounts.firstIndex(where: { $0.orgId == info.orgId }) {
                     accounts[existing].email = info.email
+                    accounts[existing].organizationName = info.orgName
                     accounts[existing].planType = info.planType
                     browsers[accounts[existing].id] = service
                     saveAccounts()
@@ -120,7 +121,7 @@ final class AppState {
                         id: id,
                         orgId: info.orgId,
                         email: info.email,
-                        organizationName: "",
+                        organizationName: info.orgName,
                         planType: info.planType.isEmpty ? "claude" : info.planType
                     )
                     accounts.append(account)

@@ -19,8 +19,11 @@ mkdir -p "$APP/Contents/Resources"
 
 cp ".build/release/$EXEC" "$APP/Contents/MacOS/"
 cp Resources/Info.plist "$APP/Contents/"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 
-# Create entitlements for hardened runtime
+# Entitlements for hardened runtime
+# - AppleScript automation (Safari control for login & usage fetch)
+# - Network client (for future direct API calls)
 ENTITLEMENTS=$(mktemp /tmp/entitlements.XXXXXX.plist)
 cat > "$ENTITLEMENTS" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -29,9 +32,9 @@ cat > "$ENTITLEMENTS" <<'PLIST'
 <dict>
     <key>com.apple.security.app-sandbox</key>
     <false/>
-    <key>com.apple.security.network.client</key>
+    <key>com.apple.security.automation.apple-events</key>
     <true/>
-    <key>com.apple.security.network.server</key>
+    <key>com.apple.security.network.client</key>
     <true/>
 </dict>
 </plist>

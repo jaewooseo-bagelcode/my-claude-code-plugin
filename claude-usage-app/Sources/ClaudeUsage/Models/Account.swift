@@ -21,6 +21,9 @@ struct Account: Identifiable, Codable {
     }
 
     var displayName: String {
-        label ?? (email.isEmpty ? planType.capitalized : email)
+        if let label, !label.isEmpty { return label }
+        if !organizationName.isEmpty { return organizationName }
+        if !email.isEmpty { return email }
+        return planType.capitalized
     }
 }

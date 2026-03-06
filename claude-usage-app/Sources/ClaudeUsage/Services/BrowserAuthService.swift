@@ -151,7 +151,14 @@ final class BrowserAuthService: @unchecked Sendable {
 
     // MARK: - Extract org info (from Safari tab after login)
 
-    func extractAccountInfo() async throws -> (orgId: String, planType: String, email: String) {
+    struct AccountInfo {
+        let orgId: String
+        let planType: String
+        let email: String
+        let orgName: String
+    }
+
+    func extractAccountInfo() async throws -> AccountInfo {
         debugLog("extractAccountInfo START")
 
         // Check if any Safari tab is already on settings/usage; if not, navigate
@@ -171,7 +178,8 @@ final class BrowserAuthService: @unchecked Sendable {
 
         try await Task.sleep(for: .seconds(4))
 
-        let js = """
+        // Step 1: Extract orgId from performance entries or HTML
+        let orgJS = """
         (function() {
             var entries = performance.getEntriesByType('resource');
             for (var i = 0; i < entries.length; i++) {
@@ -185,38 +193,73 @@ final class BrowserAuthService: @unchecked Sendable {
         })()
         """
 
-        for attempt in 0..<15 {
-            // Log with full error info
-            let curUrl = (try? await runAppleScript("""
-            tell application "Safari"
-                URL of current tab of front window
-            end tell
-            """)) ?? "?"
+        var orgId = ""
+        var planType = ""
 
+        for attempt in 0..<15 {
             let result: String
             do {
-                result = try await safariJSCurrentTab(js)
+                result = try await safariJSCurrentTab(orgJS)
             } catch {
-                debugLog("extractAccountInfo[\(attempt)] url=\(curUrl) JS ERROR: \(error)")
+                debugLog("extractAccountInfo[\(attempt)] JS ERROR: \(error)")
                 try await Task.sleep(for: .seconds(2))
                 continue
             }
-            debugLog("extractAccountInfo[\(attempt)] url=\(curUrl) result=\(result)")
+            debugLog("extractAccountInfo[\(attempt)] result=\(result)")
 
             if !result.isEmpty,
                let data = result.data(using: .utf8),
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-               let orgId = json["orgId"], !orgId.isEmpty
+               let id = json["orgId"], !id.isEmpty
             {
-                let plan = json["plan"] ?? ""
-                debugLog("extractAccountInfo: org=\(orgId) plan=\(plan)")
-                return (orgId: orgId, planType: plan, email: "")
+                orgId = id
+                planType = json["plan"] ?? ""
+                break
             }
 
             try await Task.sleep(for: .seconds(2))
         }
 
-        throw BrowserAuthError.orgNotFound
+        guard !orgId.isEmpty else { throw BrowserAuthError.orgNotFound }
+
+        // Step 2: Fetch org details (name, email) via API
+        let detailJS = "var x=new XMLHttpRequest();x.open('GET','/api/organizations',false);x.send();x.responseText"
+        var email = ""
+        var orgName = ""
+
+        if let detailResult = try? await safariJSCurrentTab(detailJS),
+           let detailData = detailResult.data(using: .utf8),
+           let orgs = try? JSONSerialization.jsonObject(with: detailData) as? [[String: Any]]
+        {
+            debugLog("extractAccountInfo: orgs count=\(orgs.count)")
+            for org in orgs {
+                if let id = org["uuid"] as? String, id == orgId {
+                    orgName = org["name"] as? String ?? ""
+                    // email might be in settings or join_token
+                    if let settings = org["settings"] as? [String: Any] {
+                        email = settings["primary_email"] as? String ?? ""
+                    }
+                    break
+                }
+            }
+        }
+
+        // Step 3: Try to get email from account info if not found
+        if email.isEmpty {
+            let emailJS = "var x=new XMLHttpRequest();x.open('GET','/api/auth/current_account',false);x.send();x.responseText"
+            if let emailResult = try? await safariJSCurrentTab(emailJS),
+               let emailData = emailResult.data(using: .utf8),
+               let account = try? JSONSerialization.jsonObject(with: emailData) as? [String: Any]
+            {
+                email = account["email_address"] as? String
+                    ?? account["email"] as? String
+                    ?? ""
+                debugLog("extractAccountInfo: email from account=\(email)")
+            }
+        }
+
+        debugLog("extractAccountInfo: org=\(orgId) name=\(orgName) email=\(email) plan=\(planType)")
+        return AccountInfo(orgId: orgId, planType: planType, email: email, orgName: orgName)
     }
 
     // MARK: - Fetch usage (via synchronous XHR in Safari)

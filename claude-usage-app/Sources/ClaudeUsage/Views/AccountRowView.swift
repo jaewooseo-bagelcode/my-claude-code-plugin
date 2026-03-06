@@ -8,9 +8,17 @@ struct AccountRowView: View {
         VStack(alignment: .leading, spacing: 6) {
             // Header
             HStack {
-                Text(account.displayName)
-                    .font(.system(.headline, design: .rounded))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(account.displayName)
+                        .font(.system(.headline, design: .rounded))
+                        .lineLimit(1)
+                    if !account.email.isEmpty, account.displayName != account.email {
+                        Text(account.email)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
 
                 if !account.planType.isEmpty {
                     Text(account.planType.capitalized)
