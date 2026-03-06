@@ -81,6 +81,7 @@ final class AppState {
             accounts[index].lastUpdated = Date()
             accounts[index].error = nil
         } catch {
+            logger.error("refreshAccount[\(account.email)]: \(error)")
             accounts[index].error = error.localizedDescription
         }
     }

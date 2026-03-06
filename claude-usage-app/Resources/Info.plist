@@ -22,5 +22,7 @@
     <string>14.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Claude Usage needs to communicate with Safari to fetch your usage data from claude.ai.</string>
 </dict>
 </plist>

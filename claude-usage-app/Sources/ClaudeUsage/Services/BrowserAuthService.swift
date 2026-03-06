@@ -126,7 +126,7 @@ final class BrowserAuthService: @unchecked Sendable {
                 end tell
                 """)
             } catch {
-                debugLog("waitForLogin: can't get URLs, retrying...")
+                debugLog("waitForLogin: can't get URLs: \(error), retrying...")
                 try await Task.sleep(for: .seconds(2))
                 continue
             }
@@ -274,7 +274,13 @@ final class BrowserAuthService: @unchecked Sendable {
             throw BrowserAuthError.invalidResponse
         }
 
-        return try JSONDecoder().decode(UsageResponse.self, from: data)
+        do {
+            return try JSONDecoder().decode(UsageResponse.self, from: data)
+        } catch {
+            debugLog("fetchUsage DECODE ERROR: \(error)")
+            debugLog("fetchUsage RAW: \(result.prefix(500))")
+            throw error
+        }
     }
 
     // MARK: - Cleanup
