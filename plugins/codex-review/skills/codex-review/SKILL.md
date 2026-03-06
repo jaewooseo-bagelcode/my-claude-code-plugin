@@ -1,6 +1,6 @@
 ---
 name: codex-review
-description: Runs GPT-5.3-Codex code review via a Bash script — READ-ONLY, never modifies code. Analyzes bugs, security vulnerabilities, performance issues, and code quality. Produces detailed reports with actionable suggestions. Invoked when the user says "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", or "identify issues". Does NOT implement fixes — codex-task-executor handles that.
+description: Runs GPT-5.4 code review via a Bash script — READ-ONLY, never modifies code. Analyzes bugs, security vulnerabilities, performance issues, and code quality. Produces detailed reports with actionable suggestions. Invoked when the user says "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", or "identify issues". Does NOT implement fixes — codex-task-executor handles that.
 ---
 
 # Instructions
@@ -242,7 +242,7 @@ You (Claude Code):
 - `codex login` completed (ChatGPT Pro subscription recommended)
 
 **Optional**:
-- `OPENAI_MODEL` — override model (default: `gpt-5.3-codex`)
+- `OPENAI_MODEL` — override model (default: `gpt-5.4`)
 
 **Cache**: `{project}/.codex-review-cache/reviews/` (`.json` + `.md` per session), `verifications/` (verify-review output)
 
@@ -464,7 +464,7 @@ Present the unified summary from both steps:
 ```
 ## Code Review Results
 
-### GPT-5.3-Codex Review
+### GPT-5.4 Review
 Session: security-reviewing-turing | Score: 6/10
 Critical: 2 | High: 1 | Medium: 3 | Low: 1
 

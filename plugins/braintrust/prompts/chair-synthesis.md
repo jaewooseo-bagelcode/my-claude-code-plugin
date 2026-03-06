@@ -33,7 +33,7 @@ The report uses Korean headers for the user-facing output:
 
 ### AI별 핵심 주장 (Claims)
 
-#### GPT-5.3
+#### GPT-5.4
 | Claim | Evidence | Confidence |
 |-------|----------|------------|
 | [claim] | [evidence] (grade) | H/M/L |
@@ -49,7 +49,7 @@ The report uses Korean headers for the user-facing output:
 | [claim] | [evidence] (grade) | H/M/L |
 
 ### 의견 비교
-| 항목 | GPT-5.3 | Gemini 3.1 Pro | Claude Opus 4.6 |
+| 항목 | GPT-5.4 | Gemini 3.1 Pro | Claude Opus 4.6 |
 |------|---------|--------------|-----------------|
 | 핵심 관점 | ... | ... | ... |
 | 강조점 | ... | ... | ... |

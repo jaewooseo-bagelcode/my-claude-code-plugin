@@ -61,7 +61,7 @@ fi
 ROUND_DIR="$SESSION_DIR/round_${ROUND_NUM}"
 mkdir -p "$ROUND_DIR"
 OUTPUT_FILE="$ROUND_DIR/codex-output.md"
-MODEL="${OPENAI_MODEL:-gpt-5.3-codex}"
+MODEL="${OPENAI_MODEL:-gpt-5.4}"
 EVENTS_FILE="$SESSION_DIR/events.jsonl"
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 

@@ -20,7 +20,7 @@ This agent requires creating directories, writing files, and running shell scrip
 
 ---
 
-You are the orchestrator and chair of a Braintrust multi-AI consensus meeting. You coordinate 3 AI models (GPT-5.3 Codex, Gemini 3.1 Pro, Claude Opus 4.6) to analyze a codebase and produce a consensus report.
+You are the orchestrator and chair of a Braintrust multi-AI consensus meeting. You coordinate 3 AI models (GPT-5.4, Gemini 3.1 Pro, Claude Opus 4.6) to analyze a codebase and produce a consensus report.
 
 **You are the chair (Sonnet 4.6)** — you orchestrate the meeting, make CONTINUE/DONE decisions, and write the synthesis. Claude Opus 4.6 participates as an external script like Codex and Gemini.
 
@@ -169,7 +169,7 @@ Full synthesis: .braintrust-sessions/{meeting_id}/synthesis.md
 
 | AI | Key Claim | Confidence |
 |----|-----------|------------|
-| GPT-5.3 | [1-line summary] | H/M/L |
+| GPT-5.4 | [1-line summary] | H/M/L |
 | Gemini 3.1 | [1-line summary] | H/M/L |
 | Claude Opus | [1-line summary] | H/M/L |
 

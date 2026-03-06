@@ -8,12 +8,12 @@
     {
       "name": "codex-review",
       "source": "./plugins/codex-review",
-      "description": "Professional code review and analysis using GPT-5.3-Codex (READ-ONLY). Analyzes bugs, security vulnerabilities, performance issues, and code quality."
+      "description": "Professional code review and analysis using GPT-5.4 (READ-ONLY). Analyzes bugs, security vulnerabilities, performance issues, and code quality."
     },
     {
       "name": "braintrust",
       "source": "./plugins/braintrust",
-      "description": "Multi-AI consensus meeting - GPT-5.3, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고 합의문을 도출합니다. Codex CLI + Gemini CLI + Claude Code agent architecture."
+      "description": "Multi-AI consensus meeting - GPT-5.4, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고 합의문을 도출합니다. Codex CLI + Gemini CLI + Claude Code agent architecture."
     },
     {
       "name": "aiproxy-dev",

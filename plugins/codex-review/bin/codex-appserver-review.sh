@@ -153,7 +153,7 @@ $REVIEW_CONTEXT
 EOF
 
 # --- Locate App Server binary ---
-MODEL="${OPENAI_MODEL:-gpt-5.3-codex}"
+MODEL="${OPENAI_MODEL:-gpt-5.4}"
 BINARY=""
 for candidate in \
   "${SCRIPT_DIR}/codex-appserver-review" \

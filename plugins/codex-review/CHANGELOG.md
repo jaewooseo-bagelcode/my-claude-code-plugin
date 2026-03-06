@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.5.4] — 2026-03-06
+
+- Upgrade default model from `gpt-5.3-codex` to `gpt-5.4`
+- Remove dead code: `scripts-go/` (unused Go implementation), `codex-review.sh` (replaced by `codex-appserver-review.sh`)
+
 ## [3.3.0] — 2026-02-20
 
 - Upgrade default model from `gpt-5.2-codex` to `gpt-5.3-codex`

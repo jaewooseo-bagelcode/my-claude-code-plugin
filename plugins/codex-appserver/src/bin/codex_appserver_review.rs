@@ -48,7 +48,7 @@ fn parse_args() -> Result<(PathBuf, String, String, PathBuf), String> {
             project_path.display()
         ));
     }
-    let model = model.unwrap_or_else(|| "gpt-5.3-codex".to_string());
+    let model = model.unwrap_or_else(|| "gpt-5.4".to_string());
 
     if positional.len() != 2 {
         return Err(format!(

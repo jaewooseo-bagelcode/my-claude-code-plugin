@@ -1,13 +1,13 @@
 # codex-review
 
-Professional code review using GPT-5.3-Codex with cross-model verification by Claude.
+Professional code review using GPT-5.4 with cross-model verification by Claude.
 
 **READ-ONLY** — identifies issues and provides suggestions but never modifies code.
 
 ## How It Works
 
 ```
-codex-review.sh ──► GPT-5.3-Codex (read-only sandbox)
+codex-appserver-review.sh ──► GPT-5.4 (read-only sandbox)
                          │
                     full review saved to cache
                          │
@@ -67,7 +67,7 @@ plugins/codex-review/
 ├── agents/
 │   └── verify-review.md             # Cross-model verification agent
 ├── bin/
-│   ├── codex-review.sh              # Main entrypoint
+│   ├── codex-appserver-review.sh     # Main entrypoint
 │   └── review-instructions.md       # Prompt template for Codex
 └── skills/codex-review/
     └── SKILL.md                     # Skill definition + orchestration
@@ -77,7 +77,7 @@ plugins/codex-review/
 
 | Step | Tool | Output | Context Cost |
 |------|------|--------|-------------|
-| 1. Review | codex-review.sh | Full review → `.codex-review-cache/reviews/{session}.md` | ~200 tok (summary only) |
+| 1. Review | codex-appserver-review.sh | Full review → `.codex-review-cache/reviews/{session}.md` | ~200 tok (summary only) |
 | 2. Verify | verify-review agent | Full report → `.codex-review-cache/verifications/{session}.md` | ~200 tok (summary only) |
 | 3. Present | Main agent | Unified summary to user | ~300 tok |
 | **Total** | | | **~700 tok** |
@@ -106,7 +106,7 @@ Sessions are stored at `{repo}/.codex-sessions/`.
 
 ## Cross-Model Verification
 
-GPT-5.3-Codex identifies issues, then Claude independently verifies each finding by reading the actual source code. This adversarial approach catches:
+GPT-5.4 identifies issues, then Claude independently verifies each finding by reading the actual source code. This adversarial approach catches:
 
 - Hallucinated file paths or line numbers
 - Misread code logic
@@ -119,7 +119,7 @@ Each finding gets a verdict: **Confirmed**, **False Positive**, or **Needs Conte
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_MODEL` | `gpt-5.3-codex` | Model for Codex CLI |
+| `OPENAI_MODEL` | `gpt-5.4` | Model for Codex CLI |
 
 ## License
 
