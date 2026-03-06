@@ -5,97 +5,84 @@ struct UsagePopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            // Header: title + all action buttons
+            HStack(spacing: 8) {
                 Text("Claude Usage")
                     .font(.headline)
                 Spacer()
-                Button {
-                    appState.refreshAll()
-                } label: {
+
+                if appState.loginStep == .idle {
+                    Button { appState.beginAddAccount() } label: {
+                        Image(systemName: "plus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Add Account")
+                } else {
+                    Button { appState.cancelAddAccount() } label: {
+                        Image(systemName: "xmark.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Cancel")
+                }
+
+                Button { claudeAuthLogin() } label: {
+                    Image(systemName: "terminal")
+                }
+                .buttonStyle(.borderless)
+                .help("Claude CLI Login via Safari")
+
+                Button { appState.refreshActive() } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
-                .help("Refresh now")
+                .help("Refresh")
+
+                Button { NSApplication.shared.terminate(nil) } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.tertiary)
+                .help("Quit")
             }
             .padding(.bottom, 8)
 
             Divider()
 
-            // Account list
-            if appState.accounts.isEmpty && appState.loginStep == .idle {
-                VStack(spacing: 8) {
+            // Login status
+            if appState.loginStep != .idle {
+                LoginStatusView()
+                    .environment(appState)
+                Divider()
+            }
+
+            // Active account (full detail)
+            if let active = appState.activeAccount {
+                AccountRowView(account: active, isActive: true) {
+                    appState.removeAccount(active)
+                }
+                .padding(.vertical, 8)
+            } else if appState.accounts.isEmpty && appState.loginStep == .idle {
+                VStack(spacing: 6) {
                     Image(systemName: "person.crop.circle.badge.plus")
-                        .font(.largeTitle)
+                        .font(.title2)
                         .foregroundStyle(.secondary)
                     Text("No accounts")
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else if !appState.accounts.isEmpty {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(appState.accounts) { account in
-                            AccountRowView(account: account) {
-                                appState.removeAccount(account)
-                            }
-                            if account.id != appState.accounts.last?.id {
-                                Divider()
-                            }
-                        }
-                    }
-                }
-                .frame(maxHeight: 400)
-                .padding(.vertical, 8)
+                .padding(.vertical, 16)
             }
 
-            // Login status
-            if appState.loginStep != .idle {
+            // Inactive accounts (compact)
+            ForEach(appState.inactiveAccounts) { account in
                 Divider()
-                LoginStatusView()
-                    .environment(appState)
+                AccountRowView(account: account, isActive: false) {
+                    appState.removeAccount(account)
+                }
+                .padding(.vertical, 6)
             }
-
-            Divider()
-
-            // Footer
-            HStack {
-                if appState.loginStep == .idle {
-                    Button {
-                        appState.beginAddAccount()
-                    } label: {
-                        Label("Add Account", systemImage: "plus.circle")
-                    }
-                    .buttonStyle(.borderless)
-                } else {
-                    Button {
-                        appState.cancelAddAccount()
-                    } label: {
-                        Label("Cancel", systemImage: "xmark.circle")
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
-                }
-
-                Button {
-                    claudeAuthLogin()
-                } label: {
-                    Label("CLI Login", systemImage: "terminal")
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Run 'claude auth login' via Safari")
-
-                Spacer()
-
-                Button("Quit") {
-                    NSApplication.shared.terminate(nil)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-            }
-            .padding(.top, 8)
         }
         .padding()
         .frame(width: 320)
@@ -104,16 +91,13 @@ struct UsagePopoverView: View {
 
 // MARK: - Claude CLI Auth
 
-/// Runs `claude auth login` with Safari as the browser
 private func claudeAuthLogin() {
     Task.detached {
-        // Write a helper script that opens URLs in Safari
         let helper = FileManager.default.temporaryDirectory.appendingPathComponent("open-safari.sh")
         try? "#!/bin/bash\nopen -a Safari \"$@\"\n".write(to: helper, atomically: true, encoding: .utf8)
         try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
 
         let process = Process()
-        // Try common paths for claude binary
         let paths = [
             "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin/claude",
             "/usr/local/bin/claude",
@@ -128,7 +112,6 @@ private func claudeAuthLogin() {
 
         try? process.run()
         process.waitUntilExit()
-
         try? FileManager.default.removeItem(at: helper)
     }
 }

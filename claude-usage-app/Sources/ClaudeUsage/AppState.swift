@@ -7,6 +7,7 @@ private let logger = Logger(subsystem: "com.sugarscone.claude-usage", category: 
 @Observable
 final class AppState {
     var accounts: [Account] = []
+    var activeAccountId: UUID?
     var browsers: [UUID: BrowserAuthService] = [:]
     private var pollTimer: Timer?
 
@@ -18,19 +19,25 @@ final class AppState {
     private var loginAccountId: UUID?
     private var loginTask: Task<Void, Never>?
 
-    var primaryAccount: Account? { accounts.first }
+    var activeAccount: Account? {
+        accounts.first { $0.id == activeAccountId }
+    }
+
+    var inactiveAccounts: [Account] {
+        accounts.filter { $0.id != activeAccountId }
+    }
 
     var menuBarText: String {
-        guard let p = primaryAccount else { return "--·--" }
+        guard let p = activeAccount else { return "--·--" }
         let s = Int(p.fiveHour?.utilization ?? 0)
         let w = Int(p.sevenDay?.utilization ?? 0)
         return "\(s)·\(w)"
     }
 
     var statusColor: StatusColor {
-        let maxUtil = accounts.compactMap { $0.fiveHour?.utilization }.max() ?? 0
-        if maxUtil >= 90 { return .red }
-        if maxUtil >= 75 { return .yellow }
+        let util = activeAccount?.fiveHour?.utilization ?? 0
+        if util >= 90 { return .red }
+        if util >= 75 { return .yellow }
         return .normal
     }
 
@@ -38,30 +45,30 @@ final class AppState {
 
     init() {
         accounts = KeychainService.loadAccounts()
+        // Set last account as active (most recently added)
+        activeAccountId = accounts.last?.id
         for account in accounts {
             browsers[account.id] = BrowserAuthService(accountId: account.id)
         }
         startPolling()
     }
 
-    // MARK: - Polling
+    // MARK: - Polling (only active account)
 
     func startPolling() {
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
-            self?.refreshAll()
+            self?.refreshActive()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            self?.refreshAll()
+            self?.refreshActive()
         }
     }
 
-    func refreshAll() {
-        for i in accounts.indices {
-            let index = i
-            Task { @MainActor in
-                await self.refreshAccount(at: index)
-            }
+    func refreshActive() {
+        guard let idx = accounts.firstIndex(where: { $0.id == activeAccountId }) else { return }
+        Task { @MainActor in
+            await refreshAccount(at: idx)
         }
     }
 
@@ -86,7 +93,7 @@ final class AppState {
         }
     }
 
-    // MARK: - Login Flow (user logs in via headed browser)
+    // MARK: - Login Flow
 
     func beginAddAccount() {
         let id = UUID()
@@ -98,26 +105,23 @@ final class AppState {
         loginTask = Task { @MainActor in
             guard let service = loginService else { return }
             do {
-                // Open Safari — user handles Cloudflare + login
                 service.openLoginPage()
 
-                // Poll until login completes (5 min timeout)
                 try await service.waitForLogin(timeout: 300)
 
-                // Extract org info
                 loginStep = .extracting
                 let info = try await service.extractAccountInfo()
 
                 // Create or update account
+                let accountId: UUID
                 if let existing = accounts.firstIndex(where: { $0.orgId == info.orgId }) {
+                    accountId = accounts[existing].id
                     accounts[existing].email = info.email
                     accounts[existing].organizationName = info.orgName
                     accounts[existing].planType = info.planType
                     browsers[accounts[existing].id] = service
-                    saveAccounts()
-                    await service.closeBrowser()
-                    await refreshAccount(at: existing)
                 } else {
+                    accountId = id
                     let account = Account(
                         id: id,
                         orgId: info.orgId,
@@ -127,10 +131,18 @@ final class AppState {
                     )
                     accounts.append(account)
                     browsers[id] = service
-                    saveAccounts()
-                    await service.closeBrowser()
-                    await refreshAccount(at: accounts.count - 1)
                 }
+
+                // Set as active and refresh
+                activeAccountId = accountId
+                saveAccounts()
+
+                if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
+                    await refreshAccount(at: idx)
+                }
+
+                // Logout Safari so next Add Account gets fresh login
+                await service.logoutSafari()
 
                 loginStep = .idle
                 loginService = nil
@@ -169,6 +181,9 @@ final class AppState {
         }
         browsers.removeValue(forKey: account.id)
         accounts.removeAll { $0.id == account.id }
+        if activeAccountId == account.id {
+            activeAccountId = accounts.last?.id
+        }
         saveAccounts()
     }
 

@@ -289,6 +289,21 @@ final class BrowserAuthService: @unchecked Sendable {
         // No-op — Safari is the user's browser, we don't close it
     }
 
+    /// Logout from claude.ai in Safari so next Add Account gets a fresh login
+    func logoutSafari() async {
+        debugLog("logoutSafari")
+        _ = try? await safariJSCurrentTab(
+            "fetch('/api/auth/logout',{method:'POST',credentials:'include'})"
+        )
+        try? await Task.sleep(for: .seconds(1))
+        // Navigate to login page so it's ready for next add
+        try? await runAppleScript("""
+        tell application "Safari"
+            set URL of current tab of front window to "https://claude.ai/login"
+        end tell
+        """)
+    }
+
     func clearSession() async {
         // No-op — Safari manages its own sessions
     }

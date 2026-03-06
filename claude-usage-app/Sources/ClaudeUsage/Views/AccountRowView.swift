@@ -2,9 +2,20 @@ import SwiftUI
 
 struct AccountRowView: View {
     let account: Account
+    let isActive: Bool
     let onRemove: () -> Void
 
     var body: some View {
+        if isActive {
+            activeView
+        } else {
+            inactiveView
+        }
+    }
+
+    // MARK: - Active: full detail
+
+    private var activeView: some View {
         VStack(alignment: .leading, spacing: 6) {
             // Header
             HStack {
@@ -51,18 +62,14 @@ struct AccountRowView: View {
             // Usage bars
             if let fiveHour = account.fiveHour {
                 UsageBarView(
-                    icon: "bolt.fill",
-                    label: "Session",
-                    value: fiveHour.utilization,
-                    resetDate: fiveHour.resetDate
+                    icon: "bolt.fill", label: "Session",
+                    value: fiveHour.utilization, resetDate: fiveHour.resetDate
                 )
             }
             if let sevenDay = account.sevenDay {
                 UsageBarView(
-                    icon: "calendar",
-                    label: "Weekly",
-                    value: sevenDay.utilization,
-                    resetDate: sevenDay.resetDate
+                    icon: "calendar", label: "Weekly",
+                    value: sevenDay.utilization, resetDate: sevenDay.resetDate
                 )
             }
 
@@ -71,7 +78,7 @@ struct AccountRowView: View {
                 ExtraUsageBarView(extra: extra)
             }
 
-            // No data yet
+            // Loading
             if account.fiveHour == nil && account.sevenDay == nil && account.error == nil {
                 HStack {
                     ProgressView().controlSize(.small)
@@ -88,7 +95,67 @@ struct AccountRowView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, 4)
+    }
+
+    // MARK: - Inactive: compact one-liner
+
+    private var inactiveView: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(account.displayName)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                if !account.planType.isEmpty {
+                    Text(account.planType.capitalized)
+                        .font(.system(size: 9).bold())
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(.primary.opacity(0.08))
+                        .foregroundStyle(.tertiary)
+                        .clipShape(Capsule())
+                }
+
+                Spacer()
+
+                Menu {
+                    Button("Remove Account", role: .destructive) { onRemove() }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+
+            // Compact usage summary
+            HStack(spacing: 8) {
+                if let s = account.fiveHour {
+                    Label("\(Int(s.utilization))%", systemImage: "bolt.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if let w = account.sevenDay {
+                    Label("\(Int(w.utilization))%", systemImage: "calendar")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if let extra = account.extraUsage, extra.isEnabled {
+                    Label("$\(String(format: "%.0f", extra.usedDollars))", systemImage: "dollarsign.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if let lastUpdated = account.lastUpdated {
+                    Spacer()
+                    Text(lastUpdated, style: .relative)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.quaternary)
+                }
+            }
+        }
+        .opacity(0.7)
     }
 }
 
@@ -141,7 +208,6 @@ struct UsageBarView: View {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(barGradient)
                         .frame(width: max(0, geo.size.width * CGFloat(value / 100)))
-                        .shadow(color: barGradient.stops.first?.color.opacity(0.3) ?? .clear, radius: 2, y: 1)
                 }
             }
             .frame(height: 8)
@@ -195,16 +261,9 @@ struct ExtraUsageBarView: View {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(barGradient)
                         .frame(width: max(0, geo.size.width * CGFloat(extra.utilization / 100)))
-                        .shadow(color: .green.opacity(0.3), radius: 2, y: 1)
                 }
             }
             .frame(height: 8)
         }
-    }
-}
-
-private extension LinearGradient {
-    var stops: [Gradient.Stop] {
-        []  // Placeholder — shadow color falls back to .clear
     }
 }
