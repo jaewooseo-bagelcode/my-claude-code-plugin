@@ -1,13 +1,13 @@
 ---
 name: codex-review
-description: Runs GPT-5.4 code review via a Bash script — READ-ONLY, never modifies code. Analyzes bugs, security vulnerabilities, performance issues, and code quality. Produces detailed reports with actionable suggestions. Invoked when the user says "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", or "identify issues". Does NOT implement fixes — codex-task-executor handles that.
+description: Runs GPT-5.4 code review via a Bash script — READ-ONLY, never modifies code. Analyzes bugs, security vulnerabilities, performance issues, and code quality. Produces detailed reports with actionable suggestions. Invoked when the user says "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", or "identify issues". Does NOT implement fixes — codex-coder handles that.
 ---
 
 # Instructions
 
-Execute Codex-powered code review with complete context preparation.
+Execute GPT-5.4 code review via Codex App Server in read-only sandbox.
 
-**IMPORTANT: This skill provides READ-ONLY analysis.** It identifies issues and provides suggestions but does NOT modify code. For implementing fixes, use `codex-task-executor`.
+**READ-ONLY analysis only.** For implementing fixes, use `codex-coder`.
 
 ## Invocation
 
@@ -17,429 +17,61 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/codex-appserver-review.sh \
   "<session-name>" "<review-context>"
 ```
 
-**Session Name**: Must be globally unique to prevent cross-contamination in parallel reviews. Generate by combining a descriptive prefix with a random suffix:
+**Session Name**: Descriptive prefix + random hex:
 ```
 <prefix>-!`openssl rand -hex 4`
 ```
-- Prefix: short descriptor (e.g., "security", "auth-review", "perf")
-- Examples: `security-a3f7b2c1`, `auth-review-7d4e9f3a`, `perf-1bc8d4ef`
+Examples: `security-a3f7b2c1`, `auth-review-7d4e9f3a`, `perf-1bc8d4ef`
 
-**Review Context**: Structured context for Codex analysis (see Context Preparation below).
+## Context Preparation
 
-**Example**:
-```python
-review_context = """
-Code Review Request:
+Codex reads files itself in the sandbox. You only need to tell it **what** to focus on, not **how**.
 
-FILES: src/auth/login.ts
-FOCUS: Security - SQL injection
-PRIORITY: Critical security first
-"""
+### Review Context Format
 
-Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-{random_hex}" "{review_context}"',
-    description="Security review"
-)
+Pass a concise review-context string:
+
+```
+FILES: src/auth/login.ts, src/middleware/auth.ts
+FOCUS: Security
+CONTEXT: SQL injection suspected at login handler line 45
 ```
 
-## Context Preparation (Critical)
-
-**Codex operates in headless execution mode and requires complete context upfront.**
+That's it. Codex reads the files, applies its review methodology, and uses latest best practices. Do NOT embed file contents — Codex reads them directly.
 
 ### Use Conversation Context
 
-**IMPORTANT: Check the conversation history before asking questions.**
-
-If the user has already provided context in previous messages:
-- Files mentioned or read in conversation
-- Issues or bugs discussed
-- Code snippets shared
-- Error messages or logs
-
-**Extract and use this information automatically.**
-
-**Example conversation:**
-```
-User: "I'm getting SQL injection warnings in auth.ts"
-User: "The login function at line 45 looks suspicious"
-User: "Can you use codex to review it?"
-
-You (Claude Code):
-[Don't ask - you already have context!]
-→ File: auth.ts
-→ Focus: Security (SQL injection)
-→ Specific: login function, line 45
-→ Invoke with complete context immediately
-```
+If the user has already discussed files, issues, or concerns, extract that information and invoke immediately. Don't re-ask what's already known.
 
 ### When Context is Missing
 
-Before invoking codex-review, YOU (Claude Code) must gather and provide:
+If no file or focus is identifiable from conversation, ask:
+1. **Which file(s)** to review
+2. **Focus area** — Security, Bugs, Performance, Code Quality, or Comprehensive
+3. **Any specific concerns**
 
-### 1. Files to Review (Required)
-- Specific file paths (e.g., `src/auth.ts`)
-- Use Read tool to preview files if needed
-- Identify related files (imports, tests, middleware)
+Default to comprehensive review if focus is unclear but files are known.
 
-### 2. Focus Area (Required)
-Specify what aspects to prioritize:
-- **Security**: SQL injection, XSS, auth bypass, data exposure
-- **Bugs**: Logic errors, null references, type issues, edge cases
-- **Performance**: N+1 queries, algorithm efficiency, memory leaks
-- **Code Quality**: Readability, naming, SOLID principles, duplication
-- **Refactoring**: Structure improvements, design patterns
-- **Comprehensive**: All aspects (default if unclear)
+## Workflow
 
-### 3. Scope (Required)
-Define review boundary:
-- Single file only
-- File + related dependencies
-- File + tests
-- Entire module/directory
+### Step 1: Build Review Context
 
-### 4. Context (Optional but Recommended)
-- Specific bug or issue user is facing
-- Recent changes (git diff if available)
-- Production incidents or error logs
-- Performance concerns or metrics
-- Security vulnerabilities suspected
+From conversation or by asking:
+- **FILES** (required): file paths to review
+- **FOCUS** (required): Security / Bugs / Performance / CodeQuality / Comprehensive
+- **CONTEXT** (optional): specific concerns, git diff, error logs
 
-### 5. External Dependencies Context (Use Context7)
+### Step 2: Invoke
 
-**CRITICAL: When code uses external libraries/frameworks, fetch latest documentation BEFORE invoking.**
-
-Per anti-pattern rule #3: "외부 의존성... Context7나 WebSearch를 통해서 메뉴얼 탐독"
-
-**Workflow:**
-```
-1. Detect libraries in code (React, FastAPI, Express, etc.)
-2. Use Context7 to get latest best practices
-3. Include in prompt to Codex
-
-Example:
-- Code uses React hooks → Query Context7 for React 19 best practices
-- Code uses FastAPI → Query Context7 for FastAPI security guidelines
-- Code uses SQL → Query Context7 for SQL injection prevention
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/codex-appserver-review.sh \
+  --project-path "!`git rev-parse --show-toplevel`" \
+  "<prefix>-!`openssl rand -hex 4`" "<review-context>"
 ```
 
-**Pattern with Context7:**
-```python
-# Query Context7 first
-context7_react = query_context7("React 19 best practices")
+### Step 3: Verify (Conditional)
 
-# Build enriched review context
-review_context = """
-Code Review Request:
-
-FILES: src/Component.tsx (React component)
-
-FOCUS: Best practices compliance + Security
-
-EXTERNAL DEPENDENCIES (from Context7):
-- React 19: Use new 'use' hook, avoid componentDidMount, Server Components best practices...
-
-CONTEXT: Check for deprecated APIs and security issues
-PRIORITY: Modern React compliance, then security
-"""
-
-Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
-    description="React review"
-)
-```
-
-
-## Session Management
-
-**Session naming**: Descriptive prefix + random hex suffix for guaranteed uniqueness.
-
-**Examples**:
-- `security-a3f7b2c1`
-- `perf-audit-7d4e9f3a`
-- `auth-1bc8d4ef`
-
-## Context Construction Workflow
-
-### Step 1: Check Conversation History
-
-Extract from previous messages:
-- **Files**: Any file paths mentioned, code read, or files discussed
-- **Issues**: Bugs, errors, performance problems mentioned
-- **Focus**: Security concerns, logic errors, performance issues discussed
-- **Code locations**: Specific functions, lines, or areas mentioned
-
-### Step 2: Determine if Context is Sufficient
-
-**Sufficient context = Can invoke immediately:**
-- File path identified
-- General focus area clear (even if not specific)
-- Some context about why review is needed
-
-**Insufficient context = Ask questions:**
-- No file identified
-- No indication of what to focus on
-- Zero context
-
-### Step 3A: If Context is Sufficient - Build Rich Prompt
-
-Construct detailed prompt from conversation context:
-
-```python
-# Example prompt construction
-prompt = f"""
-Code Review Request:
-
-FILES:
-- {file_from_conversation} (primary)
-{related_files_if_discussed}
-
-FOCUS: {inferred_from_conversation}
-{specific_issues_mentioned}
-
-CONTEXT:
-{summarize_relevant_conversation_context}
-
-{any_specific_concerns_or_requirements}
-"""
-```
-
-### Step 3B: If Context is Insufficient - Ask First
-
-If user's request is vague **and conversation has no context**, ask clarifying questions:
-
-```
-User: "Review auth.ts"
-
-You (Claude Code):
-"I can help review auth.ts with Codex. To provide the most valuable analysis, I need:
-
-1. **Focus**: Which aspect is most important?
-   - Security vulnerabilities (SQL injection, XSS, auth bypass)
-   - Bugs and logic errors
-   - Performance issues
-   - Code quality and maintainability
-   - All aspects (comprehensive review)
-
-2. **Scope**: Should I also review related files?
-   - Just auth.ts
-   - Include imported dependencies
-   - Include tests
-
-3. **Context**: Any specific concerns?
-   - Known bugs or issues?
-   - Recent production problems?
-   - Specific functionality that's failing?"
-
-[Wait for user answers]
-
-[Then build complete context and invoke skill]
-```
-
-## Environment
-
-**Prerequisites**:
-- `codex` CLI installed (`npm install -g @openai/codex`)
-- `codex login` completed (ChatGPT Pro subscription recommended)
-
-**Optional**:
-- `OPENAI_MODEL` — override model (default: `gpt-5.4`)
-
-**Cache**: `{project}/.codex-review-cache/reviews/` (`.json` + `.md` per session), `verifications/` (verify-review output)
-
-## Analysis Framework
-
-Codex analyzes code across 5 dimensions:
-
-- **Bugs & Debugging** (Critical): Logic errors, type mismatches, null references, runtime issues
-- **Security** (High): Injections, XSS, auth flaws, data exposure
-- **Performance** (Medium): Algorithm efficiency, N+1 queries, memory leaks
-- **Code Quality** (Low): Readability, naming, duplication, SOLID principles
-- **Refactoring**: Structural improvements, design patterns, abstractions
-
-## Tools Available to Codex
-
-Codex CLI runs in a **read-only sandbox** with built-in shell tools:
-- `rg` (ripgrep): Code pattern search
-- `cat -n`: File reading with line numbers
-- `git diff`: Git diff for PR reviews
-- `find`, `ls`: File discovery
-
-## Complete Workflow Examples
-
-### Example 1: Rich Conversation Context (Subagent Delegation)
-
-```
-[Earlier in conversation]
-User: "I'm debugging auth.ts"
-User: "The login function is throwing SQL errors"
-User: "Line 45 looks suspicious - it's building queries with string concat"
-
-[Current request]
-User: "Can you use codex to review this?"
-
-You (Claude Code):
-[Extract context from conversation]
-- File: auth.ts
-- Focus: Security (SQL injection from string concatenation)
-- Location: Line 45, login function
-- Issue: SQL errors in production
-
-[Build review context]
-review_context = """
-Code Review Request:
-
-FILES:
-- auth.ts (primary - login function)
-
-FOCUS: Security (CRITICAL)
-- SQL injection vulnerability
-- String concatenation in query building (line 45)
-
-CONTEXT:
-- Production SQL errors
-- Login function at line 45 uses string concatenation
-
-PRIORITY: Security vulnerabilities first
-"""
-
-[Execute with Bash]
-Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "security-{random_hex}" "{review_context}"',
-    description="Security review"
-)
-
-[Bash returns structured summary]
-→ Score: 6/10
-→ Critical: 1 | High: 1 | Medium: 2 | Low: 0
-→ Full report: .codex-review-cache/reviews/security-reviewing-turing.md
-
-[Critical/High > 0 → trigger verification]
-Task(verify-review agent, review file path + project root)
-
-[Verification agent returns summary only]
-→ Confirmed: 2 | False Positive: 0 | Needs Context: 0
-→ Full report: .codex-review-cache/verifications/security-reviewing-turing.md
-
-[Present unified summary to user]
-"Review complete. 2 confirmed findings: SQL injection in auth.ts:45, missing input validation in auth.ts:78. Full details available in cache files."
-```
-
-### Example 2: Minimal Context - Ask First
-
-```
-User: "코드 리뷰해줘"
-
-You (Claude Code):
-[No context in conversation - ask first]
-
-"I can help with code review using Codex. To provide the most valuable analysis:
-
-1. **Which file(s)** should I review?
-2. **What aspect** is most important?
-   - Security, Bugs, Performance, Code Quality, or Comprehensive
-3. **Any specific concerns** or issues you're facing?"
-
-[Wait for response, then build context]
-```
-
-### Example 3: Partial Context - Infer and Proceed
-
-```
-[Earlier in conversation]
-User: "Can you read src/auth/login.ts?"
-[You read the file]
-
-[Current request]
-User: "Review this with codex"
-
-You (Claude Code):
-[Infer from context]
-- File: src/auth/login.ts (just read)
-- Focus: Comprehensive (not specified, default to all aspects)
-
-[Execute with Bash]
-review_context = """
-FILES: src/auth/login.ts
-FOCUS: Comprehensive review
-PRIORITY: Security and bugs first
-"""
-
-Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "comprehensive-{random_hex}" "{review_context}"',
-    description="Comprehensive review"
-)
-```
-
-
-## Best Practices
-
-1. **Use conversation context**: Don't ask if you already know
-2. **Summary-only output**: codex-appserver-review.sh returns a structured summary (score, severity table, summary text) + cache file path; read full report from cache on demand
-3. **Fetch latest docs with Context7**: When code uses external libraries, query Context7 BEFORE invoking
-4. **Preview files**: Use Read tool to check file content and detect dependencies
-5. **Identify related files**: Check imports, dependencies, tests
-6. **Provide git diff**: If reviewing changes, include diff in context
-7. **Be specific**: "Security audit for SQL injection" > "Review this"
-8. **Batch related files**: Review login.ts + middleware.ts together rather than separately
-9. **Default to comprehensive**: If focus unclear but file is clear, do comprehensive review
-
-### When to Use Context7
-
-**AUTOMATICALLY query Context7 when code uses external libraries.**
-
-Detect and fetch docs for:
-- UI frameworks: React, Vue, Angular, Svelte
-- Backend frameworks: FastAPI, Express, Django, Rails
-- Databases: PostgreSQL, MongoDB, Redis
-- Security libraries: JWT, OAuth, bcrypt
-- Any external dependency for best practices/security guidelines
-
-**Workflow (AUTOMATIC):**
-```python
-# Step 1: Read file and detect imports automatically
-Read("src/api/auth.ts")
-# → Detects: import express, jsonwebtoken, bcrypt
-
-# Step 2: Query Context7 for each library
-context7_express = query_context7("Express.js security best practices 2026")
-context7_jwt = query_context7("JWT token validation security guidelines")
-context7_bcrypt = query_context7("bcrypt password hashing best practices")
-
-# Step 3: Build enriched review context
-review_context = """
-FILES: src/api/auth.ts
-FOCUS: Security
-
-EXTERNAL DEPENDENCIES (from Context7):
-- Express.js: Use helmet middleware, validate inputs, prevent injection...
-- JWT: Verify signature, check expiration, use strong secret...
-- bcrypt: Use saltRounds >= 12, async methods only...
-
-Check code compliance with these latest guidelines.
-"""
-
-# Step 4: Execute
-Bash(
-    command=f'${{CLAUDE_PLUGIN_ROOT}}/bin/codex-appserver-review.sh --project-path "$(git rev-parse --show-toplevel)" "{session_id}" "{review_context}"',
-    description="Security review"
-)
-```
-
-**This process should happen automatically** - don't ask user if they want Context7 docs.
-
-## Cross-Model Verification (Post-Review)
-
-After codex-appserver-review.sh completes, it saves the full review to a cache file and prints only a summary with severity counts and the file path.
-
-### When to Verify
-
-- **Always verify** when Critical or High count > 0 in the summary
-- **Skip** when all counts are 0 (score 9-10)
-- **Skip** when user says "skip verification" or "raw review"
-
-### How to Trigger
-
-Pass the **review file path** (not the content) to the verify-review agent:
+Trigger verify-review agent when Critical or High count > 0:
 
 ```
 Use the verify-review agent to validate the code review findings.
@@ -447,25 +79,26 @@ Review file: {review_file_path}
 Project root: {project_root}
 ```
 
-The agent reads the review from the file independently, verifies each finding against actual source code, saves its full report to a file, and returns only a summary.
+Skip verification when:
+- All counts are 0 (score 9-10)
+- User says "skip verification" or "raw review"
 
-### Presenting Results
+### Step 4: Report to User
 
-**IMPORTANT: Do NOT Read the cache files.** The summaries from codex-appserver-review.sh and verify-review contain all information needed to present results. Reading the full report files wastes main context (~2-3K tokens each). Only Read them when the user explicitly asks for details (e.g., "show me the full report", "more details on finding X").
+**Do NOT Read cache files** — summaries contain all needed information. Only read full reports when user explicitly asks.
 
-Present the unified summary from both steps:
+Present:
+1. Codex review summary (score, severity table)
+2. Verification verdict (if triggered)
+3. Confirmed Critical/High action items
+4. Cache file paths for on-demand access
 
-1. Codex review summary (from codex-appserver-review.sh stdout — severity table + score)
-2. Verification summary (from verify-review return — verdict table + confidence)
-3. Confirmed Critical/High action items (title only, from verification summary)
-4. File paths for on-demand access
-
-**Example presentation**:
+**Example**:
 ```
 ## Code Review Results
 
 ### GPT-5.4 Review
-Session: security-reviewing-turing | Score: 6/10
+Session: security-a3f7b2c1 | Score: 6/10
 Critical: 2 | High: 1 | Medium: 3 | Low: 1
 
 ### Cross-Model Verification (Claude)
@@ -476,21 +109,18 @@ Confidence Rate: 71%
 - Path Traversal Write (decode_masks.py:54)
 - Malformed JSON Handling (actions.ts:291)
 
-Want details? I can read the full reports:
-- .codex-review-cache/reviews/security-reviewing-turing.md
-- .codex-review-cache/verifications/security-reviewing-turing.md
+Full reports:
+- .codex-review-cache/reviews/security-a3f7b2c1.md
+- .codex-review-cache/verifications/security-a3f7b2c1.md
 ```
 
-## Reference Materials
+## Environment
 
-**Load these when needed for better review quality:**
+**Prerequisites**:
+- `codex` CLI installed (`npm install -g @openai/codex`)
+- `codex login` completed
 
-- **Security**: [references/common-vulnerabilities.md](references/common-vulnerabilities.md) - Security patterns and vulnerability examples
-- **Code Quality**: [references/code-quality-patterns.md](references/code-quality-patterns.md) - Anti-patterns and best practices
+**Optional**:
+- `OPENAI_MODEL` — override model (default: `gpt-5.4`)
 
-## Appendix
-
-*Human reference only (not for Claude):*
-
-- Build guide: [appendix/BUILD.md](appendix/BUILD.md)
-- Security analysis: [appendix/SECURITY.md](appendix/SECURITY.md)
+**Cache**: `{project}/.codex-review-cache/reviews/` (results), `verifications/` (verify-review output)
