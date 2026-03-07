@@ -5,6 +5,7 @@ struct ClaudeUsageApp: App {
     @State private var appState = AppState()
     @State private var alertBlink = false
     @State private var blinkTimer: Timer?
+    @State private var healthTimer: Timer?
 
     private var isAlert: Bool {
         guard let p = appState.menuBarAccount else { return false }
@@ -27,6 +28,7 @@ struct ClaudeUsageApp: App {
                 }
                 .onAppear {
                     if isAlert { startBlinkTimer() }
+                    startHealthCheck()
                 }
         }
         .menuBarExtraStyle(.window)
@@ -43,6 +45,16 @@ struct ClaudeUsageApp: App {
         blinkTimer?.invalidate()
         blinkTimer = nil
         alertBlink = false
+    }
+
+    /// Periodic health check — ensures polling timer is alive after sleep/wake
+    private func startHealthCheck() {
+        guard healthTimer == nil else { return }
+        healthTimer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { _ in
+            Task { @MainActor in
+                appState.ensurePollingAlive()
+            }
+        }
     }
 
     // MARK: - Render colored menu bar image
@@ -88,14 +100,28 @@ struct ClaudeUsageApp: App {
         renderer.scale = 2.0
 
         guard let cgImage = renderer.cgImage else {
-            let fallback = NSImage(size: NSSize(width: 44, height: 18))
-            return fallback
+            appState.debugLog("renderView: ImageRenderer returned nil cgImage")
+            // Fallback: render a visible placeholder instead of an empty image
+            return renderFallbackIcon()
         }
 
         let image = NSImage(
             cgImage: cgImage,
             size: NSSize(width: cgImage.width / 2, height: cgImage.height / 2)
         )
+        image.isTemplate = false
+        return image
+    }
+
+    /// Always-visible fallback icon when ImageRenderer fails
+    private func renderFallbackIcon() -> NSImage {
+        let size = NSSize(width: 22, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            NSColor.white.withAlphaComponent(0.6).setFill()
+            let icon = NSBezierPath(ovalIn: rect.insetBy(dx: 3, dy: 1))
+            icon.fill()
+            return true
+        }
         image.isTemplate = false
         return image
     }

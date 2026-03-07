@@ -15,6 +15,9 @@ final class AppState {
     }
     var browsers: [UUID: BrowserAuthService] = [:]
     private var pollTimer: Timer?
+    private(set) var lastPollTime: Date?
+    private(set) var lastPollError: String?
+    private(set) var pollCount: Int = 0
 
     // Login flow state
     enum LoginStep { case idle, waitingForLogin, extracting }
@@ -59,6 +62,7 @@ final class AppState {
         activeEmail = UserDefaults.standard.string(forKey: "activeEmail") ?? ""
         menuBarOrgId = UserDefaults.standard.string(forKey: "menuBarOrgId") ?? ""
         accounts = KeychainService.loadAccounts()
+        debugLog("init: \(accounts.count) accounts, activeEmail=\(activeEmail)")
 
         // Backfill empty emails from org name (e.g. "user@example.com's Organization")
         var changed = false
@@ -80,30 +84,58 @@ final class AppState {
         }
         startPolling()
 
-        // Refresh on wake from sleep
+        // Refresh on wake from sleep — wait 10s for Safari to be ready
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            logger.info("System woke from sleep — restarting poll")
-            self?.startPolling()
+            self?.debugLog("WAKE from sleep — will restart poll in 10s")
+            self?.startPolling(initialDelay: 10)
+        }
+
+        // Sleep notification — log for diagnostics
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.debugLog("SLEEP — pollCount=\(self?.pollCount ?? 0)")
         }
     }
 
     // MARK: - Polling (active accounts only)
 
-    func startPolling() {
+    func startPolling(initialDelay: TimeInterval = 3) {
         pollTimer?.invalidate()
+        debugLog("startPolling: interval=300s, initialDelay=\(initialDelay)s")
         pollTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             self?.refreshActive()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
             self?.refreshActive()
         }
     }
 
+    /// Check if polling is healthy — call periodically to detect stalled timers
+    var isPollingHealthy: Bool {
+        guard let last = lastPollTime else { return pollCount == 0 }
+        return Date().timeIntervalSince(last) < 600 // <10 min since last poll
+    }
+
+    func ensurePollingAlive() {
+        if !isPollingHealthy {
+            debugLog("HEALTH CHECK FAILED — lastPoll=\(lastPollTime?.description ?? "never"), restarting")
+            startPolling(initialDelay: 5)
+        }
+    }
+
     func refreshActive() {
-        for i in accounts.indices where accounts[i].email == activeEmail {
+        pollCount += 1
+        lastPollTime = Date()
+        lastPollError = nil
+        let activeIndices = accounts.indices.filter { accounts[$0].email == activeEmail }
+        debugLog("refreshActive #\(pollCount): \(activeIndices.count) accounts")
+
+        for i in activeIndices {
             let index = i
             Task { @MainActor in
                 await self.refreshAccount(at: index)
@@ -127,8 +159,11 @@ final class AppState {
             accounts[index].lastUpdated = Date()
             accounts[index].error = nil
         } catch {
+            let msg = error.localizedDescription
             logger.error("refreshAccount[\(account.displayName)]: \(error)")
-            accounts[index].error = error.localizedDescription
+            debugLog("refreshAccount ERROR [\(account.displayName)]: \(msg)")
+            accounts[index].error = msg
+            lastPollError = msg
         }
     }
 
@@ -235,5 +270,25 @@ final class AppState {
 
     private func saveAccounts() {
         try? KeychainService.saveAccounts(accounts)
+    }
+
+    // MARK: - Debug Log
+
+    func debugLog(_ msg: String) {
+        let logDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/claude-usage")
+        try? FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+        let file = logDir.appendingPathComponent("app-state.log")
+        let ts = ISO8601DateFormatter().string(from: Date())
+        let line = "[\(ts)] \(msg)\n"
+        if let data = line.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: file.path) {
+                if let h = try? FileHandle(forWritingTo: file) {
+                    h.seekToEndOfFile(); h.write(data); h.closeFile()
+                }
+            } else {
+                try? data.write(to: file)
+            }
+        }
     }
 }
