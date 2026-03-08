@@ -7,6 +7,7 @@ struct Account: Identifiable, Codable {
     var organizationName: String
     var planType: String
     var label: String?
+    var orionProfileId: String?  // Orion profile UUID ("default" for main instance)
 
     var fiveHour: UsageMetric?
     var sevenDay: UsageMetric?
@@ -18,7 +19,7 @@ struct Account: Identifiable, Codable {
     var error: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, orgId, email, organizationName, planType, label
+        case id, orgId, email, organizationName, planType, label, orionProfileId
         case fiveHour, sevenDay, sevenDaySonnet, extraUsage, lastUpdated
     }
 

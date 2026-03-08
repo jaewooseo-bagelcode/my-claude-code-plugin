@@ -16,7 +16,7 @@ struct UsagePopoverView: View {
                         Image(systemName: "plus.circle")
                     }
                     .buttonStyle(.borderless)
-                    .help("Add Account")
+                    .help("Add Account (via Orion profile)")
                 } else {
                     Button { appState.cancelAddAccount() } label: {
                         Image(systemName: "xmark.circle")
@@ -25,17 +25,11 @@ struct UsagePopoverView: View {
                     .help("Cancel")
                 }
 
-                Button { claudeAuthLogin() } label: {
-                    Image(systemName: "terminal")
-                }
-                .buttonStyle(.borderless)
-                .help("Claude CLI Login via Safari")
-
-                Button { appState.refreshActive() } label: {
+                Button { appState.refreshAll() } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
-                .help("Refresh")
+                .help("Refresh All")
 
                 Button { NSApplication.shared.terminate(nil) } label: {
                     Image(systemName: "xmark")
@@ -49,7 +43,7 @@ struct UsagePopoverView: View {
 
             Divider()
 
-            // Login status
+            // Login flow
             if appState.loginStep != .idle {
                 LoginStatusView()
                     .environment(appState)
@@ -64,36 +58,31 @@ struct UsagePopoverView: View {
                     Text("No accounts")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Text("Create Orion profiles, then add accounts")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
 
-            // Active account group (full detail)
-            if !appState.activeAccounts.isEmpty {
-                AccountGroupView(
-                    email: appState.activeEmail,
-                    accounts: appState.activeAccounts,
-                    isActive: true
-                ) {
-                    appState.removeAccountGroup(email: appState.activeEmail)
-                }
-                .padding(.vertical, 6)
+            // All accounts grouped by email, ordered by Orion profile slot name
+            let profileMap = Dictionary(
+                uniqueKeysWithValues: appState.orion.discoverProfiles().map { ($0.uuid, $0.name) }
+            )
+            let groups = Dictionary(grouping: appState.accounts, by: \.email)
+            let orderedEmails = groups.keys.sorted { a, b in
+                let aName = profileMap[groups[a]?.first?.orionProfileId ?? ""] ?? "z"
+                let bName = profileMap[groups[b]?.first?.orionProfileId ?? ""] ?? "z"
+                return aName < bName
             }
-
-            // Inactive account groups (compact)
-            let inactiveGroups = Dictionary(grouping: appState.inactiveAccounts, by: \.email)
-            ForEach(inactiveGroups.keys.sorted(), id: \.self) { email in
-                if let group = inactiveGroups[email] {
-                    Divider()
-                    AccountGroupView(
-                        email: email,
-                        accounts: group,
-                        isActive: false
-                    ) {
+            ForEach(Array(orderedEmails.enumerated()), id: \.element) { idx, email in
+                if idx > 0 { Divider() }
+                if let group = groups[email] {
+                    AccountGroupView(email: email, accounts: group) {
                         appState.removeAccountGroup(email: email)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
                 }
             }
         }
@@ -102,52 +91,60 @@ struct UsagePopoverView: View {
     }
 }
 
-// MARK: - Account Group (email → multiple orgs)
+// MARK: - Account Group (email -> multiple orgs)
 
 struct AccountGroupView: View {
+    @Environment(AppState.self) private var appState
     let email: String
     let accounts: [Account]
-    let isActive: Bool
     let onRemoveGroup: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isActive ? 8 : 4) {
+        VStack(alignment: .leading, spacing: 8) {
             // Group header
             HStack {
                 Text(email.isEmpty ? "Unknown" : email)
-                    .font(.system(isActive ? .subheadline : .caption, design: .rounded))
-                    .foregroundStyle(isActive ? .primary : .secondary)
+                    .font(.system(.subheadline, design: .rounded))
                     .lineLimit(1)
 
                 Spacer()
 
                 Menu {
+                    if let account = accounts.first {
+                        Button {
+                            appState.showBrowser(for: account)
+                        } label: {
+                            Label("Open Browser", systemImage: "globe")
+                        }
+
+                        Button {
+                            appState.claudeAuthLogin(for: account)
+                        } label: {
+                            Label("CLI Login", systemImage: "terminal")
+                        }
+
+                        Divider()
+                    }
                     Button("Remove All", role: .destructive) { onRemoveGroup() }
                 } label: {
                     Image(systemName: "ellipsis.circle")
-                        .font(isActive ? .body : .caption2)
-                        .foregroundStyle(isActive ? .secondary : .tertiary)
+                        .foregroundStyle(.secondary)
                 }
                 .menuIndicator(.hidden)
                 .fixedSize()
             }
 
-            // Org rows
+            // Org rows — all with full detail
             ForEach(accounts) { account in
-                if isActive {
-                    ActiveOrgRow(account: account)
-                } else {
-                    InactiveOrgRow(account: account)
-                }
+                OrgRow(account: account)
             }
         }
-        .opacity(isActive ? 1.0 : 0.7)
     }
 }
 
-// MARK: - Active Org Row (full bars)
+// MARK: - Org Row (full bars for all accounts)
 
-struct ActiveOrgRow: View {
+struct OrgRow: View {
     @Environment(AppState.self) private var appState
     let account: Account
 
@@ -221,90 +218,6 @@ struct ActiveOrgRow: View {
     }
 }
 
-// MARK: - Inactive Org Row (compact one-liner)
-
-struct InactiveOrgRow: View {
-    let account: Account
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text(account.organizationName.isEmpty ? account.planType.capitalized : account.organizationName)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Text(account.planType.capitalized)
-                    .font(.system(size: 9).bold())
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(.primary.opacity(0.08))
-                    .foregroundStyle(.tertiary)
-                    .clipShape(Capsule())
-
-                Spacer()
-            }
-
-            // Session + Weekly summary
-            HStack(spacing: 12) {
-                if let s = account.fiveHour {
-                    HStack(spacing: 3) {
-                        Image(systemName: "bolt.fill").font(.system(size: 9))
-                        Text("Session \(Int(s.utilization))%")
-                    }
-                    .font(.caption2).foregroundStyle(.tertiary)
-                }
-                if let w = account.sevenDay {
-                    HStack(spacing: 3) {
-                        Image(systemName: "calendar").font(.system(size: 9))
-                        Text("Weekly \(Int(w.utilization))%")
-                    }
-                    .font(.caption2).foregroundStyle(.tertiary)
-                }
-                if let extra = account.extraUsage, extra.isEnabled {
-                    HStack(spacing: 3) {
-                        Image(systemName: "dollarsign.circle").font(.system(size: 9))
-                        Text("$\(String(format: "%.0f", extra.usedDollars))")
-                    }
-                    .font(.caption2).foregroundStyle(.tertiary)
-                }
-            }
-
-            if account.fiveHour == nil && account.sevenDay == nil {
-                Text("No data")
-                    .font(.caption2).foregroundStyle(.quaternary)
-            }
-        }
-    }
-}
-
-// MARK: - Claude CLI Auth
-
-private func claudeAuthLogin() {
-    Task.detached {
-        let helper = FileManager.default.temporaryDirectory.appendingPathComponent("open-safari.sh")
-        try? "#!/bin/bash\nopen -a Safari \"$@\"\n".write(to: helper, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
-
-        let process = Process()
-        let paths = [
-            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin/claude",
-            "/usr/local/bin/claude",
-            "/opt/homebrew/bin/claude",
-        ]
-        guard let claudePath = paths.first(where: { FileManager.default.fileExists(atPath: $0) }) else { return }
-        process.executableURL = URL(fileURLWithPath: claudePath)
-        process.arguments = ["auth", "login"]
-        process.environment = ProcessInfo.processInfo.environment.merging(
-            ["BROWSER": helper.path]
-        ) { _, new in new }
-
-        try? process.run()
-        process.waitUntilExit()
-        try? FileManager.default.removeItem(at: helper)
-    }
-}
-
 // MARK: - Login Status
 
 struct LoginStatusView: View {
@@ -313,18 +226,38 @@ struct LoginStatusView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             switch appState.loginStep {
+            case .pickProfile:
+                Text("Select Orion profile:")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                ForEach(appState.availableProfiles, id: \.uuid) { profile in
+                    Button {
+                        appState.selectProfile(profile)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "globe")
+                                .font(.caption)
+                            Text(profile.name)
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                }
+
             case .waitingForLogin:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Log in via the browser window")
+                    Text("Log in via Orion browser...")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+
             case .extracting:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Extracting account info...")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+
             default:
                 EmptyView()
             }

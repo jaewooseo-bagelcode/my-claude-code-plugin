@@ -7,33 +7,28 @@ private let logger = Logger(subsystem: "com.sugarscone.claude-usage", category: 
 @Observable
 final class AppState {
     var accounts: [Account] = []
-    var activeEmail: String {
-        didSet { UserDefaults.standard.set(activeEmail, forKey: "activeEmail") }
-    }
     var menuBarOrgId: String {
         didSet { UserDefaults.standard.set(menuBarOrgId, forKey: "menuBarOrgId") }
     }
-    var browsers: [UUID: BrowserAuthService] = [:]
     private var pollTimer: Timer?
     private(set) var lastPollTime: Date?
     private(set) var lastPollError: String?
     private(set) var pollCount: Int = 0
 
     // Login flow state
-    enum LoginStep { case idle, waitingForLogin, extracting }
+    enum LoginStep { case idle, pickProfile, waitingForLogin, extracting }
     var loginStep: LoginStep = .idle
     var loginError: String?
-    private var loginService: BrowserAuthService?
+    var availableProfiles: [OrionService.OrionProfile] = []
     private var loginTask: Task<Void, Never>?
+    private var loginProfileUUID: String?
 
-    /// Active accounts = orgs under the current Safari session email
-    var activeAccounts: [Account] {
-        accounts.filter { $0.email == activeEmail && !activeEmail.isEmpty }
-    }
+    let orion = OrionService.shared
 
-    /// Inactive = everything else, grouped by email
-    var inactiveAccounts: [Account] {
-        accounts.filter { $0.email != activeEmail || activeEmail.isEmpty }
+    /// The account shown in the menu bar
+    var menuBarAccount: Account? {
+        accounts.first { $0.orgId == menuBarOrgId }
+            ?? accounts.first
     }
 
     var menuBarText: String {
@@ -52,19 +47,12 @@ final class AppState {
 
     enum StatusColor { case normal, yellow, red }
 
-    /// The account shown in the menu bar
-    var menuBarAccount: Account? {
-        accounts.first { $0.orgId == menuBarOrgId }
-            ?? activeAccounts.first
-    }
-
     init() {
-        activeEmail = UserDefaults.standard.string(forKey: "activeEmail") ?? ""
         menuBarOrgId = UserDefaults.standard.string(forKey: "menuBarOrgId") ?? ""
         accounts = KeychainService.loadAccounts()
-        debugLog("init: \(accounts.count) accounts, activeEmail=\(activeEmail)")
+        debugLog("init: \(accounts.count) accounts")
 
-        // Backfill empty emails from org name (e.g. "user@example.com's Organization")
+        // Backfill empty emails from org name
         var changed = false
         for i in accounts.indices where accounts[i].email.isEmpty {
             let name = accounts[i].organizationName
@@ -75,25 +63,20 @@ final class AppState {
         }
         if changed { try? KeychainService.saveAccounts(accounts) }
 
-        // Fallback: if saved email doesn't match any account, use first non-empty
-        if !accounts.contains(where: { $0.email == activeEmail && !$0.email.isEmpty }) {
-            activeEmail = accounts.first(where: { !$0.email.isEmpty })?.email ?? accounts.first?.email ?? ""
-        }
-        for account in accounts {
-            browsers[account.id] = BrowserAuthService(accountId: account.id)
-        }
+        // Ensure Orion profiles claude-usage-1..3 exist
+        orion.ensureProfilesExist()
+
         startPolling()
 
-        // Refresh on wake from sleep — wait 10s for Safari to be ready
+        // Refresh on wake from sleep
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            self?.debugLog("WAKE from sleep — will restart poll in 10s")
+            self?.debugLog("WAKE — restarting poll in 10s")
             self?.startPolling(initialDelay: 10)
         }
 
-        // Sleep notification — log for diagnostics
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification,
             object: nil, queue: .main
@@ -102,40 +85,38 @@ final class AppState {
         }
     }
 
-    // MARK: - Polling (active accounts only)
+    // MARK: - Polling (ALL accounts via URLSession)
 
     func startPolling(initialDelay: TimeInterval = 3) {
         pollTimer?.invalidate()
         debugLog("startPolling: interval=300s, initialDelay=\(initialDelay)s")
         pollTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
-            self?.refreshActive()
+            self?.refreshAll()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
-            self?.refreshActive()
+            self?.refreshAll()
         }
     }
 
-    /// Check if polling is healthy — call periodically to detect stalled timers
     var isPollingHealthy: Bool {
         guard let last = lastPollTime else { return pollCount == 0 }
-        return Date().timeIntervalSince(last) < 600 // <10 min since last poll
+        return Date().timeIntervalSince(last) < 600
     }
 
     func ensurePollingAlive() {
         if !isPollingHealthy {
-            debugLog("HEALTH CHECK FAILED — lastPoll=\(lastPollTime?.description ?? "never"), restarting")
+            debugLog("HEALTH CHECK FAILED — restarting")
             startPolling(initialDelay: 5)
         }
     }
 
-    func refreshActive() {
+    func refreshAll() {
         pollCount += 1
         lastPollTime = Date()
         lastPollError = nil
-        let activeIndices = accounts.indices.filter { accounts[$0].email == activeEmail }
-        debugLog("refreshActive #\(pollCount): \(activeIndices.count) accounts")
+        debugLog("refreshAll #\(pollCount): \(accounts.count) accounts")
 
-        for i in activeIndices {
+        for i in accounts.indices {
             let index = i
             Task { @MainActor in
                 await self.refreshAccount(at: index)
@@ -147,11 +128,13 @@ final class AppState {
     func refreshAccount(at index: Int) async {
         guard accounts.indices.contains(index) else { return }
         let account = accounts[index]
-        let service = browsers[account.id] ?? BrowserAuthService(accountId: account.id)
-        browsers[account.id] = service
+        guard let profileId = account.orionProfileId else {
+            accounts[index].error = "No Orion profile linked"
+            return
+        }
 
         do {
-            let usage = try await service.fetchUsage(orgId: account.orgId)
+            let usage = try await orion.fetchUsage(profileUUID: profileId, orgId: account.orgId)
             accounts[index].fiveHour = usage.fiveHour
             accounts[index].sevenDay = usage.sevenDay
             accounts[index].sevenDaySonnet = usage.sevenDaySonnet
@@ -167,78 +150,79 @@ final class AppState {
         }
     }
 
-    // MARK: - Login Flow
+    // MARK: - Login Flow (Orion Profile)
 
     func beginAddAccount() {
-        loginService = BrowserAuthService(accountId: UUID())
-        loginStep = .extracting
+        loginError = nil
+        let usedIds = Set(accounts.compactMap(\.orionProfileId))
+        availableProfiles = orion.availableSlots(usedProfileIds: usedIds)
+
+        if availableProfiles.isEmpty {
+            loginError = accounts.count >= OrionService.maxSlots
+                ? "Max \(OrionService.maxSlots) accounts reached"
+                : "No Orion profiles found. Install Orion: brew install --cask orion"
+            return
+        }
+
+        // If only one slot available, skip picker
+        if availableProfiles.count == 1 {
+            selectProfile(availableProfiles[0])
+        } else {
+            loginStep = .pickProfile
+        }
+    }
+
+    func selectProfile(_ profile: OrionService.OrionProfile) {
+        loginProfileUUID = profile.uuid
+        loginStep = .waitingForLogin
         loginError = nil
 
+        // Open profile browser to claude.ai
+        orion.openProfile(profile.uuid, url: "https://claude.ai/settings/usage")
+
         loginTask = Task { @MainActor in
-            guard let service = loginService else { return }
             do {
-                // Step 1: Try current Safari session first
-                var orgs: [BrowserAuthService.AccountInfo] = []
-                let currentOrgs = try? await service.extractAllOrganizations()
-                let currentEmail = currentOrgs?.first?.email ?? ""
+                // Wait for sessionKey cookie
+                loginStep = .waitingForLogin
+                try await orion.waitForLogin(profileUUID: profile.uuid, timeout: 300)
 
-                if let found = currentOrgs, !found.isEmpty, currentEmail != activeEmail {
-                    // Different account already logged in → use it directly
-                    orgs = found
-                } else {
-                    // Same account or not logged in → logout and fresh login
-                    if currentEmail == activeEmail && !activeEmail.isEmpty {
-                        await service.logoutSafari()
-                        try await Task.sleep(for: .seconds(1))
-                    }
+                // Extract organizations
+                loginStep = .extracting
+                let orgs = try await orion.extractOrganizations(profileUUID: profile.uuid)
+                guard !orgs.isEmpty else { throw OrionError.apiFailed("No organizations found") }
 
-                    loginStep = .waitingForLogin
-                    service.openLoginPage()
-                    try await service.waitForLogin(timeout: 300)
-
-                    loginStep = .extracting
-                    orgs = try await service.extractAllOrganizations()
-                }
-
-                guard !orgs.isEmpty else { throw BrowserAuthError.orgNotFound }
-
-                let email = orgs.first?.email ?? ""
-                activeEmail = email
-
-                // Create or update accounts for each org
+                // Create or update accounts
                 for info in orgs {
                     if let existing = accounts.firstIndex(where: { $0.orgId == info.orgId }) {
                         accounts[existing].email = info.email
                         accounts[existing].organizationName = info.orgName
                         accounts[existing].planType = info.planType
+                        accounts[existing].orionProfileId = profile.uuid
                     } else {
-                        let account = Account(
+                        accounts.append(Account(
                             id: UUID(),
                             orgId: info.orgId,
                             email: info.email,
                             organizationName: info.orgName,
-                            planType: info.planType.isEmpty ? "claude" : info.planType
-                        )
-                        accounts.append(account)
-                        browsers[account.id] = BrowserAuthService(accountId: account.id)
+                            planType: info.planType.isEmpty ? "claude" : info.planType,
+                            orionProfileId: profile.uuid
+                        ))
                     }
                 }
 
                 saveAccounts()
-                logger.info("Added \(orgs.count) org(s) for \(email)")
+                logger.info("Added \(orgs.count) org(s) from profile \(profile.name)")
 
-                // Refresh active accounts
-                refreshActive()
-
+                refreshAll()
                 loginStep = .idle
-                loginService = nil
+                loginProfileUUID = nil
                 loginTask = nil
             } catch is CancellationError {
                 // User cancelled
             } catch {
                 loginError = error.localizedDescription
                 loginStep = .idle
-                loginService = nil
+                loginProfileUUID = nil
                 loginTask = nil
             }
         }
@@ -249,30 +233,65 @@ final class AppState {
         loginTask = nil
         loginStep = .idle
         loginError = nil
-        loginService = nil
+        loginProfileUUID = nil
     }
 
-    // MARK: - Remove (by email group)
+    // MARK: - Show Browser
+
+    func showBrowser(for account: Account) {
+        guard let profileId = account.orionProfileId else { return }
+        orion.openProfile(profileId, url: "https://claude.ai/settings/usage")
+    }
+
+    // MARK: - Remove
 
     func removeAccountGroup(email: String) {
         accounts.removeAll { $0.email == email }
-        if activeEmail == email {
-            activeEmail = accounts.first?.email ?? ""
-        }
         saveAccounts()
     }
 
     func removeAccount(_ account: Account) {
-        browsers.removeValue(forKey: account.id)
         accounts.removeAll { $0.id == account.id }
         saveAccounts()
+    }
+
+    // MARK: - CLI Login
+
+    func claudeAuthLogin(for account: Account) {
+        guard let profileId = account.orionProfileId else { return }
+        let profiles = orion.discoverProfiles()
+        guard let profile = profiles.first(where: { $0.uuid == profileId }) else { return }
+
+        Task.detached {
+            let helper = FileManager.default.temporaryDirectory.appendingPathComponent("open-orion-\(profileId).sh")
+            let script = "#!/bin/bash\nopen -a \"\(profile.appPath)\" \"$@\"\n"
+            try? script.write(to: helper, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+
+            let process = Process()
+            let paths = [
+                "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin/claude",
+                "/usr/local/bin/claude",
+                "/opt/homebrew/bin/claude",
+            ]
+            guard let claudePath = paths.first(where: { FileManager.default.fileExists(atPath: $0) }) else { return }
+            process.executableURL = URL(fileURLWithPath: claudePath)
+            process.arguments = ["auth", "login"]
+            process.environment = ProcessInfo.processInfo.environment.merging(
+                ["BROWSER": helper.path]
+            ) { _, new in new }
+
+            try? process.run()
+            process.waitUntilExit()
+            try? FileManager.default.removeItem(at: helper)
+        }
     }
 
     private func saveAccounts() {
         try? KeychainService.saveAccounts(accounts)
     }
 
-    // MARK: - Debug Log
+    // MARK: - Debug
 
     func debugLog(_ msg: String) {
         let logDir = FileManager.default.homeDirectoryForCurrentUser
