@@ -155,10 +155,11 @@ async fn run() -> Result<(), String> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    // 4. Wait for matching turn/completed (10 min timeout)
-    eprintln!("Waiting for review completion (timeout: 10min)...");
+    // 4. Wait for matching turn/completed
+    let turn_timeout = parse_turn_timeout();
+    eprintln!("Waiting for review completion (timeout: {}s)...", turn_timeout.as_secs());
     let completed = client
-        .wait_turn_completed(turn_id.as_deref(), Duration::from_secs(600))
+        .wait_turn_completed(turn_id.as_deref(), turn_timeout)
         .await?;
 
     // 5. Check for turn-level error
@@ -314,6 +315,23 @@ fn print_summary(session_name: &str, cache_dir: &Path, review: &ReviewOutput) {
     println!("| Low      | {} |", counts[3]);
     println!();
     println!("**Summary**: {}", review.summary);
+}
+
+/// Read turn timeout from `CODEX_TURN_TIMEOUT` env var (seconds).
+/// Default: 1 hour. Set to 0 for effectively unlimited (~584 billion years).
+fn parse_turn_timeout() -> Duration {
+    const DEFAULT_SECS: u64 = 3600;
+    match std::env::var("CODEX_TURN_TIMEOUT") {
+        Ok(val) => match val.parse::<u64>() {
+            Ok(0) => Duration::from_secs(u64::MAX / 2),
+            Ok(s) => Duration::from_secs(s),
+            Err(_) => {
+                eprintln!("Warning: invalid CODEX_TURN_TIMEOUT={val:?}, using default {DEFAULT_SECS}s");
+                Duration::from_secs(DEFAULT_SECS)
+            }
+        },
+        Err(_) => Duration::from_secs(DEFAULT_SECS),
+    }
 }
 
 /// Parse the last valid ReviewOutput from concatenated JSON objects.
