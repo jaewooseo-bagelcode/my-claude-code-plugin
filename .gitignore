@@ -2,6 +2,9 @@
 .DS_Store
 .codex-sessions/
 .codex-review-cache/
+.codex-coder-cache/
 .braintrust-sessions/
 .gemini-lens-cache/
+.claude/plans/
+claude-usage-app/ClaudeUsage.app/
 target/
