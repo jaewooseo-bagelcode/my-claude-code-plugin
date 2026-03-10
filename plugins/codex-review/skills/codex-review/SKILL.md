@@ -39,6 +39,27 @@ CONTEXT: SQL injection suspected at login handler line 45
 
 That's it. Codex reads the files, applies its review methodology, and uses latest best practices. Do NOT embed file contents — Codex reads them directly.
 
+### Design-Aware Context (Recommended for implementation reviews)
+
+When reviewing code that has a design plan, architecture document, or discussion context, include design intent to eliminate false positives and deepen findings:
+
+```
+FILES: src/store/chat-store.ts, src/store/messages-store.ts
+FOCUS: Bugs, Comprehensive
+CONTEXT: Message Steering implementation.
+DESIGN_DECISIONS:
+- Abort clears pending (intentional: abort = cancel everything)
+- Auto-send after invoke completes in finally block
+EDGE_CASES:
+- New chat while pending → clear before streaming guard
+- Project switch → clear in initializeForProject
+CONSTRAINTS:
+- No Rust changes
+- Single SSOT for pending state
+```
+
+Without design context, Codex may flag intentional behavior as bugs. With it, Codex skips false positives and finds actual gaps between intent and implementation.
+
 ### Use Conversation Context
 
 If the user has already discussed files, issues, or concerns, extract that information and invoke immediately. Don't re-ask what's already known.
@@ -60,6 +81,9 @@ From conversation or by asking:
 - **FILES** (required): file paths to review
 - **FOCUS** (required): Security / Bugs / Performance / CodeQuality / Comprehensive
 - **CONTEXT** (optional): specific concerns, git diff, error logs
+- **DESIGN_DECISIONS** (optional): extract from conversation plan or `.claude/plans/` if available
+- **EDGE_CASES** (optional): known edge cases and their handling strategy
+- **CONSTRAINTS** (optional): scope boundaries (e.g., "no backend changes")
 
 ### Step 2: Invoke
 

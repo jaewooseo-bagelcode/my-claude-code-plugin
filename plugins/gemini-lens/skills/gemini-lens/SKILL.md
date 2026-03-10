@@ -95,16 +95,6 @@ CONTEXT: [relevant background — e.g., "React app", "mobile-first design", "dar
 5. General description"
 ```
 
-## Context7 Integration
-
-**For `review` mode**, automatically query Context7 for relevant guidelines:
-
-- **WCAG 2.2**: When checking accessibility compliance
-- **Material Design / Apple HIG**: When reviewing platform-specific UI
-- **Framework design systems**: When user mentions a specific framework (Tailwind, Chakra UI, etc.)
-
-Include fetched guidelines in the analysis prompt as `REFERENCE GUIDELINES:` section.
-
 ## Session Management
 
 **Session naming**: Descriptive prefix + random hex suffix.
@@ -128,62 +118,12 @@ Include fetched guidelines in the analysis prompt as `REFERENCE GUIDELINES:` sec
 
 **Cache**: `{project}/.gemini-lens-cache/analyses/` (project-isolated)
 
-## Workflow Examples
-
-### Example 1: Rich Conversation Context
+## Example
 
 ```
-[Earlier in conversation]
-User: "I just redesigned the login page, here's a screenshot"
-User: [provides /tmp/login-redesign.png]
-User: "Does this follow accessibility guidelines?"
+User: "Compare these two designs" [provides /tmp/v1.png and /tmp/v2.png]
 
-You (Claude Code):
-[Extract context from conversation]
-- File: /tmp/login-redesign.png
-- Mode: review (accessibility focus)
-- Context: Login page redesign
-
-[Query Context7 for WCAG 2.2 guidelines]
-
-[Build prompt and invoke]
-bash ${CLAUDE_PLUGIN_ROOT}/bin/gemini-lens.sh \
-  --project-path "$(git rev-parse --show-toplevel)" \
-  --mode "review" \
-  --file "/tmp/login-redesign.png" \
-  "login-a11y-{hex}" "Visual Analysis Request:
-TARGET: Login page redesign
-FOCUS: WCAG 2.2 accessibility compliance — contrast ratios, touch targets, focus indicators, text alternatives
-CONTEXT: Login page screenshot for accessibility audit
-REFERENCE GUIDELINES: [WCAG 2.2 from Context7]"
-```
-
-### Example 2: Minimal Context
-
-```
-User: "What's in this screenshot? /tmp/error.png"
-
-You (Claude Code):
-[Minimal but sufficient context]
-- File: /tmp/error.png
-- Mode: describe (default)
-
-bash ${CLAUDE_PLUGIN_ROOT}/bin/gemini-lens.sh \
-  --project-path "$(git rev-parse --show-toplevel)" \
-  --mode "describe" \
-  --file "/tmp/error.png" \
-  "describe-{hex}" "Describe what is visible in this screenshot — all UI elements, text, layout, and any notable visual details."
-```
-
-### Example 3: Multi-file Comparison
-
-```
-User: "Compare these two designs"
-User: [provides /tmp/v1.png and /tmp/v2.png]
-
-You (Claude Code):
-- Files: /tmp/v1.png, /tmp/v2.png
-- Mode: compare (2 files + comparison intent)
+→ Files: /tmp/v1.png, /tmp/v2.png | Mode: compare (2 files + comparison intent)
 
 bash ${CLAUDE_PLUGIN_ROOT}/bin/gemini-lens.sh \
   --project-path "$(git rev-parse --show-toplevel)" \
@@ -200,6 +140,5 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/gemini-lens.sh \
 3. **Verify file existence** — use `ls` to confirm files exist before invoking.
 4. **Auto-detect mode** — use the decision table above. Default to `describe` when unclear.
 5. **Batch related files** — use multiple `--file` flags in one invocation rather than separate calls.
-6. **Context7 for review mode** — automatically fetch WCAG/design system docs when doing UI/UX review.
-7. **Absolute paths only** — resolve all file paths to absolute paths before passing to `--file`.
-8. **Summary-only return** — the script returns word count + cache path. Present this to the user, not the full analysis content.
+6. **Absolute paths only** — resolve all file paths to absolute paths before passing to `--file`.
+7. **Summary-only return** — the script returns word count + cache path. Present this to the user, not the full analysis content.
