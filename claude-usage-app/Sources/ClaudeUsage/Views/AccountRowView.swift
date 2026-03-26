@@ -68,10 +68,11 @@ struct ExtraUsageBarView: View {
     let extra: ExtraUsage
 
     private var barGradient: LinearGradient {
-        if extra.utilization >= 90 {
+        let util = extra.utilization ?? 0
+        if util >= 90 {
             return LinearGradient(colors: [.red, .orange], startPoint: .leading, endPoint: .trailing)
         }
-        if extra.utilization >= 75 {
+        if util >= 75 {
             return LinearGradient(colors: [.orange, .yellow], startPoint: .leading, endPoint: .trailing)
         }
         return LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing)
@@ -101,7 +102,7 @@ struct ExtraUsageBarView: View {
                         .fill(.primary.opacity(0.08))
                     RoundedRectangle(cornerRadius: 4)
                         .fill(barGradient)
-                        .frame(width: max(0, geo.size.width * CGFloat(extra.utilization / 100)))
+                        .frame(width: max(0, geo.size.width * CGFloat((extra.utilization ?? 0) / 100)))
                 }
             }
             .frame(height: 8)

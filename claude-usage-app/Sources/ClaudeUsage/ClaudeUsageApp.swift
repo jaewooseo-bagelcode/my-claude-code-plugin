@@ -61,8 +61,7 @@ struct ClaudeUsageApp: App {
 
     private func renderMenuBar() -> NSImage {
         guard let p = appState.menuBarAccount,
-              let session = p.fiveHour?.utilization,
-              let weekly = p.sevenDay?.utilization
+              p.fiveHour != nil || p.sevenDay != nil
         else {
             return renderView {
                 HStack(spacing: 3) {
@@ -75,6 +74,9 @@ struct ClaudeUsageApp: App {
                 }
             }
         }
+
+        let session = p.fiveHour?.utilization ?? 0
+        let weekly = p.sevenDay?.utilization ?? 0
 
         return renderView {
             HStack(spacing: 5) {

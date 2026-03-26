@@ -190,15 +190,15 @@ struct OrgRow: View {
             // Usage bars
             if let fiveHour = account.fiveHour {
                 UsageBarView(icon: "bolt.fill", label: "Session",
-                             value: fiveHour.utilization, resetDate: fiveHour.resetDate)
+                             value: fiveHour.utilization ?? 0, resetDate: fiveHour.resetDate)
                     .saturation(isMenuBarSource ? 1.0 : 0.3)
             }
             if let sevenDay = account.sevenDay {
                 UsageBarView(icon: "calendar", label: "Weekly",
-                             value: sevenDay.utilization, resetDate: sevenDay.resetDate)
+                             value: sevenDay.utilization ?? 0, resetDate: sevenDay.resetDate)
                     .saturation(isMenuBarSource ? 1.0 : 0.3)
             }
-            if let extra = account.extraUsage, extra.isEnabled {
+            if let extra = account.extraUsage, extra.isEnabled == true {
                 ExtraUsageBarView(extra: extra)
                     .saturation(isMenuBarSource ? 1.0 : 0.3)
             }
