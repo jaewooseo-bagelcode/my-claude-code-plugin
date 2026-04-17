@@ -1,15 +1,11 @@
 [package]
 name = "codex-appserver"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 
 [[bin]]
 name = "codex-appserver-review"
 path = "src/bin/codex_appserver_review.rs"
-
-[[bin]]
-name = "codex-appserver-coder"
-path = "src/bin/codex_appserver_coder.rs"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

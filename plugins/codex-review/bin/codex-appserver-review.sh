@@ -169,7 +169,7 @@ if [[ -z "$BINARY" ]]; then
   echo "Searched:" >&2
   echo "  ${SCRIPT_DIR}/codex-appserver-review" >&2
   echo "  ${SCRIPT_DIR}/../../target/release/codex-appserver-review" >&2
-  echo "Build it with: cd plugins && cargo build -p common --release" >&2
+  echo "Build it with: cd plugins && cargo build -p codex-appserver --release" >&2
   exit 2
 fi
 

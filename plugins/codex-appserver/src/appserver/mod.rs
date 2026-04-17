@@ -8,6 +8,5 @@ pub mod protocol;
 
 pub use client::{CodexAppServerClient, ShutdownStatus};
 pub use protocol::{
-    coder_output_schema, review_output_schema, CoderOutput, CoderStatus, Dimension, FileAction,
-    FileChange, Finding, JsonRpcError, ReviewOutput, Severity,
+    review_output_schema, Dimension, Finding, JsonRpcError, ReviewOutput, Severity,
 };

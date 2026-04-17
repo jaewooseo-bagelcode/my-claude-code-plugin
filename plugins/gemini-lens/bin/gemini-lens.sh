@@ -210,7 +210,7 @@ for f in "${FILES[@]}"; do
 done
 
 # --- Execute gemini ---
-MODEL="${GEMINI_MODEL:-gemini-3-flash-preview}"
+MODEL="${GEMINI_MODEL:-gemini-3.1-flash-lite-preview}"
 GEMINI_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/gemini-output-XXXXXX")
 STDERR_LOG="${TMPDIR:-/tmp}/gemini-lens-stderr-$SESSION_NAME.log"
 trap 'rm -f "$TEMP_PROMPT" "$TEMP_MEMORY" "$GEMINI_OUTPUT"' EXIT

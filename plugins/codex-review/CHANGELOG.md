@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.5.8] — 2026-04-17
+
+- Remove stale files: `bin/system-prompt-en.md`, `bin/codex-review-darwin-arm64` (Go impl leftover), `skills/codex-review/{appendix,references}/` (legacy docs)
+- Fix error message in `codex-appserver-review.sh` (`cargo build -p common` → `cargo build -p codex-appserver`)
+- Drop stale `codex-coder` references from SKILL.md (sibling plugin was retired)
+
 ## [3.5.4] — 2026-03-06
 
 - Upgrade default model from `gpt-5.3-codex` to `gpt-5.4`

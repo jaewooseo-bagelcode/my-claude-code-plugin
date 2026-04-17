@@ -1,6 +1,6 @@
 # gemini-lens
 
-Multimodal visual analysis plugin for Claude Code, powered by Gemini 3.1 Pro.
+Multimodal visual analysis plugin for Claude Code, powered by Gemini 3.1 Flash Lite.
 
 ## What it does
 
@@ -53,7 +53,7 @@ bash bin/gemini-lens.sh \
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GEMINI_MODEL` | `gemini-3-flash-preview` | Gemini model to use |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite-preview` | Gemini model to use |
 
 ## Cache
 

@@ -1,13 +1,13 @@
 ---
 name: codex-review
-description: Runs GPT-5.4 code review via a Bash script — READ-ONLY, never modifies code. Analyzes bugs, security vulnerabilities, performance issues, and code quality. Produces detailed reports with actionable suggestions. Invoked when the user says "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", or "identify issues". Does NOT implement fixes — codex-coder handles that.
+description: Runs GPT-5.4 code review via a Bash script — READ-ONLY, never modifies code. Analyzes bugs, security vulnerabilities, performance issues, and code quality. Produces detailed reports with actionable suggestions. Invoked when the user says "review this code", "analyze this", "find bugs in", "what's wrong with", "check security of", "audit this code", "is this code safe", or "identify issues".
 ---
 
 # Instructions
 
 Execute GPT-5.4 code review via Codex App Server in read-only sandbox.
 
-**READ-ONLY analysis only.** For implementing fixes, use `codex-coder`.
+**READ-ONLY analysis only.** This skill does not modify code — it only identifies issues and recommends fixes.
 
 ## Invocation
 

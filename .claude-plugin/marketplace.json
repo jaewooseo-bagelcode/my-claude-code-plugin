@@ -8,27 +8,12 @@
     {
       "name": "codex-review",
       "source": "./plugins/codex-review",
-      "description": "Professional code review and analysis using GPT-5.4 (READ-ONLY). Analyzes bugs, security vulnerabilities, performance issues, and code quality."
-    },
-    {
-      "name": "braintrust",
-      "source": "./plugins/braintrust",
-      "description": "Multi-AI consensus meeting - GPT-5.4, Gemini 3.1 Pro, Claude Opus 4.6이 코드베이스를 병렬 분석하고 합의문을 도출합니다. Codex CLI + Gemini CLI + Claude Code agent architecture."
-    },
-    {
-      "name": "aiproxy-dev",
-      "source": "./plugins/aiproxy-dev",
-      "description": "AIProxy API development guide - codeb auth, endpoints, models, SDK patterns for error-free AI API implementation"
+      "description": "Professional code review and analysis using GPT-5.4 (READ-ONLY). Analyzes bugs, security vulnerabilities, performance issues, and code quality with detailed reports."
     },
     {
       "name": "gemini-lens",
       "source": "./plugins/gemini-lens",
-      "description": "Multimodal visual analysis using Gemini 3.1 Pro — images, videos, screenshots, diagrams, documents"
-    },
-    {
-      "name": "codex-coder",
-      "source": "./plugins/codex-coder",
-      "description": "AI-powered code implementation using GPT-5.4 with workspace-write sandbox"
+      "description": "Multimodal visual analysis using Gemini 3.1 Flash Lite — images, videos, screenshots, diagrams, documents"
     }
   ]
 }
